@@ -102,14 +102,12 @@
     </div>
 
     <script>
-        // 替换为你自己的 Supabase 配置
         const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let currentCategoryId = null;
 
-        // 初始化检查登录态
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session) showForum();
         });
@@ -133,7 +131,6 @@
             const password = document.getElementById('password').value;
             const msgEl = document.getElementById('auth-msg');
 
-            // 严格校验支持 QQ 邮箱与 Gmail
             if (!email.endsWith('@qq.com') && !email.endsWith('@gmail.com')) {
                 msgEl.innerText = '仅支持后缀为 @qq.com 或 @gmail.com 的邮箱注册！';
                 return;
@@ -141,7 +138,7 @@
 
             const { error } = await supabase.auth.signUp({ email, password });
             if (error) msgEl.innerText = error.message;
-            else alert('注册成功！请查收邮件完成验证。');
+            else alert('注册成功！请查收邮件验证。');
         }
 
         async function handleLogout() {
@@ -153,6 +150,7 @@
             const { data } = await supabase.from('categories').select('*');
             const container = document.getElementById('categories-list');
             container.innerHTML = '';
+            if (!data) return;
             data.forEach(cat => {
                 const div = document.createElement('div');
                 div.style.cssText = 'padding: 8px; cursor: pointer; border-radius: 4px; margin-bottom: 4px;';
@@ -172,7 +170,8 @@
         async function loadTopics(categoryId) {
             const { data } = await supabase.from('topics').select('*').eq('category_id', categoryId).order('created_at', { ascending: false });
             const container = document.getElementById('topics-container');
-            container.innerHTML = data.length ? '' : '<p style="color:var(--meta-color)">暂无话题，快来发布第一条吧！</p>';
+            container.innerHTML = (data && data.length) ? '' : '<p style="color:var(--meta-color)">暂无话题，快来发布第一条吧！</p>';
+            if (!data) return;
             data.forEach(topic => {
                 const div = document.createElement('div');
                 div.className = 'card';
@@ -191,6 +190,7 @@
             if (!title || !content || !currentCategoryId) return alert('请填写完整标题和内容！');
 
             const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return alert('请先登录！');
             const username = user.email.split('@')[0];
 
             const { error } = await supabase.from('topics').insert([{
