@@ -12,7 +12,6 @@
             --text-color: #2d3748;
             --card-bg: #ffffff;
             --border-color: #e2e8f0;
-            /* 优化：将明亮模式的主色调/高亮调整为更有质感、辨识度更高的经典专业蓝 */
             --primary-color: #2b6cb0;
             --meta-color: #718096;
             --hover-bg: #ebf8ff;
@@ -24,7 +23,6 @@
             --text-color: #e2e8f0;
             --card-bg: #2d3748;
             --border-color: #4a5568;
-            /* 暗色模式保持柔和的Slate灰蓝色，避免纯蓝刺眼 */
             --primary-color: #94a3b8;
             --meta-color: #a0aec0;
             --hover-bg: #334155;
@@ -413,7 +411,6 @@
                 return;
             }
 
-            // 配套修改：指定 emailRedirectTo 指向新建的 confirm.html 页面地址
             const { error } = await db.auth.signUp({ 
                 email, 
                 password,
@@ -586,19 +583,35 @@
                 const cDiv = document.createElement('div');
                 cDiv.style.cssText = 'background:var(--bg-color); padding: 8px 10px; border-radius:6px; margin-bottom: 6px; font-size:12px;';
                 
-                let delBtn = '';
+                // 优化：为每条评论增加一个“回复”按钮，点击时自动@该用户
+                let commentControls = '';
                 if (isCommOwner || isAdmin) {
-                    delBtn = `<span class="clickable-name" style="color:#e53e3e; float:right;" onclick="window.deleteComment('${comm.id}', '${topicId}')">删除</span>`;
+                    commentControls += `<span class="clickable-name" style="color:#e53e3e; margin-left:10px;" onclick="window.deleteComment('${comm.id}', '${topicId}')">删除</span>`;
                 }
 
                 cDiv.innerHTML = `
-                    ${delBtn}
-                    <b><span class="clickable-name" onclick="window.viewUserProfile('${comm.user_id}')">${comm.user_name}</span></b>: 
-                    <span>${comm.content}</span>
-                    <div style="color:var(--meta-color); font-size:10px; margin-top:2px;">${new Date(comm.created_at).toLocaleString()}</div>
+                    <div class="flex" style="align-items:flex-start;">
+                        <div>
+                            <b><span class="clickable-name" onclick="window.viewUserProfile('${comm.user_id}')">${comm.user_name}</span></b>: 
+                            <span>${comm.content}</span>
+                            <div style="color:var(--meta-color); font-size:10px; margin-top:2px;">${new Date(comm.created_at).toLocaleString()}</div>
+                        </div>
+                        <div>
+                            <span class="clickable-name" style="color:var(--primary-color);" onclick="window.replyToUser('${topicId}', \`${comm.user_name.replace(/[`'\\]/g, '\\$&')}\`)">回复</span>
+                            ${commentControls}
+                        </div>
+                    </div>
                 `;
                 container.appendChild(cDiv);
             });
+        }
+
+        // 新增：快捷引用并@某位评论用户
+        window.replyToUser = function(topicId, targetUserName) {
+            const input = document.getElementById(`comment-input-${topicId}`);
+            if (!input) return;
+            input.value = `@${targetUserName} `;
+            input.focus();
         }
 
         window.createComment = async function(topicId) {
