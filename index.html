@@ -46,7 +46,7 @@
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             background-color: var(--bg-color);
-            opacity: 0.5; /* 调低遮罩透明度，让自定义背景或默认背景更加通透清晰 */
+            opacity: 0.5;
             z-index: -1;
             pointer-events: none;
         }
@@ -101,7 +101,7 @@
             width: 80px; font-size: 12px; color: var(--meta-color); flex-shrink: 0;
         }
 
-        /* 移动端屏幕（<=768px）：字体与间距进一步缩小，PC端保持绝对不变 */
+        /* 移动端屏幕（<=768px）：字体与间距缩小，PC端保持绝对不变 */
         @media (max-width: 768px) {
             body {
                 font-size: 12px;
@@ -238,7 +238,7 @@
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
 
             <!-- 修改密码功能区块 -->
-            <h4 style="margin: 0 0 6px 0;">🔒 账号密码修改</h4>
+            <h4 style="margin: 0 0 6px 0;">账号密码修改</h4>
             <p style="font-size:12px; color:var(--meta-color); margin-bottom:8px;">请输入您的新密码（至少 6 位字符）：</p>
             <input type="password" id="new-password" placeholder="请输入新密码..." style="margin-bottom:8px;">
             <button onclick="window.updatePassword()" style="background:#d69e2e; padding: 6px 14px; font-size:12px; width:100%;">确认修改密码</button>
@@ -247,8 +247,8 @@
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
 
             <!-- 自定义背景设置 -->
-            <h4 style="margin: 0 0 6px 0;">自定义背景设置</h4>
-            <p style="font-size:12px; color:var(--meta-color); margin-bottom:8px;">上传本地图片将保存在浏览器本地，各会话相互独立：</p>
+            <h4 style="margin: 0 0 6px 0;">自定义背景</h4>
+            <p style="font-size:12px; color:var(--meta-color); margin-bottom:8px;">上传图片将保存在浏览器本地，各会话相互独立</p>
             <input type="file" id="bg-file-input" accept="image/*" style="margin-bottom:8px;">
             <div style="display: flex; gap: 8px; margin-bottom: 15px;">
                 <button onclick="window.saveCustomBackground()" style="padding: 6px 12px; font-size:12px; flex:1;">应用背景</button>
@@ -286,11 +286,11 @@
         let currentUserProfile = null;
         let currentAuthUser = null;
 
-        // 初始化加载本地自定义背景（若存在则直接覆盖默认背景）
+        // 初始化加载本地自定义背景
         function initCustomBackground() {
             const savedBg = localStorage.getItem('forum_custom_bg');
             if (savedBg) {
-                document.documentElement.style.setProperty('--custom-bg', `url("${savedBg}")`);
+                document.body.style.backgroundImage = `url("${savedBg}")`;
             }
         }
         initCustomBackground();
@@ -389,7 +389,6 @@
             showForum();
         }
 
-        // 自定义背景保存与即时应用（彻底覆盖默认图片并隐藏默认背景）
         window.saveCustomBackground = function() {
             const fileInput = document.getElementById('bg-file-input');
             if (fileInput.files && fileInput.files[0]) {
@@ -397,11 +396,9 @@
                 const reader = new FileReader();
                 reader.onload = function(e) {
                     const base64Image = e.target.result;
-                    // 保存到 LocalStorage
                     localStorage.setItem('forum_custom_bg', base64Image);
-                    // 即时修改 CSS 变量，完全覆盖默认的 beijing.png
-                    document.documentElement.style.setProperty('--custom-bg', `url("${base64Image}")`);
-                    alert('自定义背景已成功应用并覆盖默认背景！');
+                    document.body.style.backgroundImage = `url("${base64Image}")`;
+                    alert('自定义背景应用并保存成功！');
                 };
                 reader.readAsDataURL(file);
             } else {
@@ -409,12 +406,11 @@
             }
         };
 
-        // 恢复默认背景方法
         window.resetCustomBackground = function() {
             localStorage.removeItem('forum_custom_bg');
-            document.documentElement.style.setProperty('--custom-bg', "url('beijing.png')");
+            document.body.style.backgroundImage = '';
             document.getElementById('bg-file-input').value = '';
-            alert('已成功恢复默认背景');
+            alert('已成功恢复默认背景 (beijing.png)');
         };
 
         window.updatePassword = async function() {
@@ -497,7 +493,7 @@
             
             if (isAdmin) {
                 html += `<hr style="border:0; border-top:1px dashed var(--border-color); margin: 8px 0;">`;
-                html += `<p style="font-size:12px; color:var(--admin-badge); margin: 3px 0;"><b>[管理员视图]</b></p>`;
+                html += `<p style="font-size:12px; color:var(--admin-badge); margin: 3px 0;"><b>[管理员特权视图 - 忽略隐私设置]</b></p>`;
                 html += `<p style="font-size:13px; margin: 5px 0;"><b>真实姓名：</b> ${data.real_name || '未填写'}</p>`;
                 html += `<p style="font-size:13px; margin: 5px 0;"><b>手机号：</b> ${data.phone || '未填写'}</p>`;
                 html += `<p style="font-size:13px; margin: 5px 0;"><b>性别：</b> ${data.gender || '未填写'}</p>`;
