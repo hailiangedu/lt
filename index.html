@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CampusBBS - 现代化校园论坛</title>
+    <!-- 引入 Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --bg-color: #f4f6f8;
+            --text-color: #2d3748;
+            --card-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --primary-color: #3182ce;
+            --meta-color: #718096;
+        }
+        [data-theme="dark"] {
+            --bg-color: #1a202c;
+            --text-color: #e2e8f0;
+            --card-bg: #2d3748;
+            --border-color: #4a5568;
+            --primary-color: #63b3ed;
+            --meta-color: #a0aec0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0; padding: 20px;
+            box-sizing: border-box;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .hidden { display: none !important; }
+        input, textarea, select {
+            width: 100%; padding: 10px; margin-bottom: 12px;
+            background: var(--card-bg); color: var(--text-color);
+            border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box;
+        }
+        button {
+            background-color: var(--primary-color); color: white;
+            border: none; padding: 10px 16px; border-radius: 6px;
+            cursor: pointer; font-weight: 600;
+        }
+        button:hover { opacity: 0.9; }
+        .flex { display: flex; justify-content: space-between; align-items: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 登录/注册面板 -->
+        <div id="auth-section" class="card" style="max-width: 400px; margin: 50px auto;">
+            <h2>校园论坛登录 / 注册</h2>
+            <p style="font-size: 13px; color: var(--meta-color);">支持 QQ 邮箱与 Gmail 后缀注册</p>
+            <input type="email" id="email" placeholder="请输入 QQ邮箱 或 Gmail">
+            <input type="password" id="password" placeholder="请输入密码 (至少6位)">
+            <div style="display: flex; gap: 10px;">
+                <button onclick="handleLogin()" style="flex:1;">登录</button>
+                <button onclick="handleRegister()" style="flex:1; background-color:#2b6cb0;">注册</button>
+            </div>
+            <p id="auth-msg" style="color: red; font-size: 13px; margin-top: 10px;"></p>
+        </div>
+
+        <!-- 论坛主界面 -->
+        <div id="forum-section" class="hidden">
+            <div class="card flex">
+                <h2 style="margin:0;">🎓 校园交流社区</h2>
+                <div>
+                    <button onclick="toggleTheme()" style="background:none; border:1px solid var(--border-color); color:var(--text-color);">🌓 主题</button>
+                    <button onclick="handleLogout()" style="background:#e53e3e;">退出</button>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 20px;">
+                <!-- 左侧板块导航 -->
+                <div style="width: 25%;">
+                    <div class="card">
+                        <h3>讨论板块</h3>
+                        <div id="categories-list">加载中...</div>
+                    </div>
+                </div>
+                <!-- 右侧话题列表 -->
+                <div style="width: 75%;">
+                    <div class="card">
+                        <h3>发表新话题</h3>
+                        <input type="text" id="topic-title" placeholder="话题标题...">
+                        <textarea id="topic-content" rows="3" placeholder="分享你的新鲜事、求助或闲置信息..."></textarea>
+                        <button onclick="createTopic()">发布话题</button>
+                    </div>
+                    <div id="topics-container"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 替换为你自己的 Supabase 配置
+        const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let currentCategoryId = null;
+
+        // 初始化检查登录态
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) showForum();
+        });
+
+        function showForum() {
+            document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('forum-section').classList.remove('hidden');
+            loadCategories();
+        }
+
+        async function handleLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) document.getElementById('auth-msg').innerText = error.message;
+            else showForum();
+        }
+
+        async function handleRegister() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const msgEl = document.getElementById('auth-msg');
+
+            // 严格校验支持 QQ 邮箱与 Gmail
+            if (!email.endsWith('@qq.com') && !email.endsWith('@gmail.com')) {
+                msgEl.innerText = '仅支持后缀为 @qq.com 或 @gmail.com 的邮箱注册！';
+                return;
+            }
+
+            const { error } = await supabase.auth.signUp({ email, password });
+            if (error) msgEl.innerText = error.message;
+            else alert('注册成功！请查收邮件完成验证。');
+        }
+
+        async function handleLogout() {
+            await supabase.auth.signOut();
+            location.reload();
+        }
+
+        async function loadCategories() {
+            const { data } = await supabase.from('categories').select('*');
+            const container = document.getElementById('categories-list');
+            container.innerHTML = '';
+            data.forEach(cat => {
+                const div = document.createElement('div');
+                div.style.cssText = 'padding: 8px; cursor: pointer; border-radius: 4px; margin-bottom: 4px;';
+                div.innerText = `# ${cat.name}`;
+                div.onclick = () => {
+                    currentCategoryId = cat.id;
+                    loadTopics(cat.id);
+                };
+                container.appendChild(div);
+            });
+            if (data.length > 0) {
+                currentCategoryId = data[0].id;
+                loadTopics(data[0].id);
+            }
+        }
+
+        async function loadTopics(categoryId) {
+            const { data } = await supabase.from('topics').select('*').eq('category_id', categoryId).order('created_at', { ascending: false });
+            const container = document.getElementById('topics-container');
+            container.innerHTML = data.length ? '' : '<p style="color:var(--meta-color)">暂无话题，快来发布第一条吧！</p>';
+            data.forEach(topic => {
+                const div = document.createElement('div');
+                div.className = 'card';
+                div.innerHTML = `
+                    <h4 style="margin:0 0 8px 0;">${topic.title}</h4>
+                    <p style="font-size:14px; margin:0 0 10px 0;">${topic.content}</p>
+                    <span style="font-size:12px; color:var(--meta-color);">发布者: ${topic.user_name} | 时间: ${new Date(topic.created_at).toLocaleString()}</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function createTopic() {
+            const title = document.getElementById('topic-title').value;
+            const content = document.getElementById('topic-content').value;
+            if (!title || !content || !currentCategoryId) return alert('请填写完整标题和内容！');
+
+            const { data: { user } } = await supabase.auth.getUser();
+            const username = user.email.split('@')[0];
+
+            const { error } = await supabase.from('topics').insert([{
+                category_id: currentCategoryId,
+                user_id: user.id,
+                user_name: username,
+                title, content
+            }]);
+
+            if (error) {
+                alert('发布失败: ' + error.message);
+            } else {
+                document.getElementById('topic-title').value = '';
+                document.getElementById('topic-content').value = '';
+                loadTopics(currentCategoryId);
+            }
+        }
+
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme');
+            document.documentElement.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+        }
+    </script>
+</body>
+</html>
