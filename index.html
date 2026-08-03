@@ -16,6 +16,7 @@
             --meta-color: #718096;
             --hover-bg: #ebf8ff;
             --admin-badge: #e53e3e;
+            --warning-bg: #fff5f5;
         }
         [data-theme="dark"] {
             --bg-color: #1a202c;
@@ -26,6 +27,7 @@
             --meta-color: #a0aec0;
             --hover-bg: #2b6cb0;
             --admin-badge: #fc8181;
+            --warning-bg: #2d1a1a;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -68,6 +70,10 @@
             background-color: var(--admin-badge); color: white;
             font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle;
         }
+        .warning-card {
+            background-color: var(--warning-bg) !important;
+            border-left: 4px solid var(--admin-badge);
+        }
     </style>
 </head>
 <body>
@@ -95,7 +101,9 @@
                     <span id="user-profile-summary" style="font-size: 12px; color: var(--meta-color);">加载中...</span>
                 </div>
                 <div style="display: flex; gap: 8px;">
-                    <button onclick="window.openProfile()" style="background:#4a5568;">个人中心</button>
+                    <button onclick="window.openProfile()" style="background:#4a5568; position: relative;">
+                        个人中心 <span id="notification-badge" class="hidden" style="position:absolute; top:-5px; right:-5px; background:red; width:10px; height:10px; border-radius:50%;"></span>
+                    </button>
                     <button onclick="window.toggleTheme()" style="background:none; border:1px solid var(--border-color); color:var(--text-color);">🌓 主题</button>
                     <button onclick="window.handleLogout()" style="background:#e53e3e;">退出</button>
                 </div>
@@ -122,24 +130,37 @@
             </div>
         </div>
 
-        <!-- 个人中心弹窗面板 -->
-        <div id="profile-section" class="card hidden" style="max-width: 500px; margin: 30px auto;">
-            <h3>个人中心</h3>
-            <p style="font-size: 13px; color: var(--meta-color);">在此修改你的社区昵称与查看账号身份</p>
-            <label style="font-size: 12px;">绑定邮箱：</label>
-            <input type="text" id="profile-email" disabled style="background: var(--bg-color);">
+        <!-- 个人中心及消息通知面板 -->
+        <div id="profile-section" class="card hidden" style="max-width: 600px; margin: 30px auto;">
+            <h3>个人中心与消息通知</h3>
+            <p style="font-size: 13px; color: var(--meta-color);">在此修改昵称、查看身份以及系统违规警告通知</p>
             
-            <label style="font-size: 12px;">当前身份：</label>
-            <input type="text" id="profile-role" disabled style="background: var(--bg-color);">
+            <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+                <div style="flex: 1;">
+                    <label style="font-size: 12px;">绑定邮箱：</label>
+                    <input type="text" id="profile-email" disabled style="background: var(--bg-color);">
+                </div>
+                <div style="flex: 1;">
+                    <label style="font-size: 12px;">当前身份：</label>
+                    <input type="text" id="profile-role" disabled style="background: var(--bg-color);">
+                </div>
+            </div>
 
             <label style="font-size: 12px;">修改昵称：</label>
-            <input type="text" id="profile-nickname" placeholder="输入新的昵称...">
-            
-            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button onclick="window.updateProfile()" style="flex:1;">保存修改</button>
-                <button onclick="window.closeProfile()" style="flex:1; background-color: #718096;">返回论坛</button>
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="profile-nickname" placeholder="输入新的昵称..." style="margin-bottom:0;">
+                <button onclick="window.updateProfile()" style="width: 120px;">保存修改</button>
             </div>
-            <p id="profile-msg" style="color: green; font-size: 13px; margin-top: 10px;"></p>
+            <p id="profile-msg" style="color: green; font-size: 13px; margin: 5px 0 15px 0;"></p>
+
+            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
+
+            <h4 style="margin: 0 0 10px 0;">🔔 我的消息通知</h4>
+            <div id="notifications-list" style="max-height: 250px; overflow-y: auto;">加载中...</div>
+
+            <div style="margin-top: 20px; text-align: right;">
+                <button onclick="window.closeProfile()" style="background-color: #718096; padding: 8px 20px;">返回论坛</button>
+            </div>
         </div>
     </div>
 
@@ -152,20 +173,30 @@
 
         let currentCategoryId = null;
         let currentUserProfile = null;
+        let currentAuthUser = null;
 
         db.auth.getSession().then(({ data: { session } }) => {
             if (session) initUserSession(session.user);
         });
 
         async function initUserSession(user) {
-            // 获取用户的 Profile 详细信息（昵称、管理员身份）
+            currentAuthUser = user;
             const { data } = await db.from('profiles').select('*').eq('id', user.id).single();
             currentUserProfile = data || { nickname: user.email.split('@')[0], is_admin: false };
             
-            const roleText = currentUserProfile.is_admin ? '🛡️ 管理员' : '👤 普通成员';
             document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${currentUserProfile.nickname}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
             
+            checkUnreadNotifications(user.id);
             showForum();
+        }
+
+        async function checkUnreadNotifications(userId) {
+            const { data } = await db.from('notifications').select('*').eq('user_id', userId).eq('is_read', false);
+            if (data && data.length > 0) {
+                document.getElementById('notification-badge').classList.remove('hidden');
+            } else {
+                document.getElementById('notification-badge').classList.add('hidden');
+            }
         }
 
         function showForum() {
@@ -176,15 +207,45 @@
         }
 
         window.openProfile = async function() {
-            const { data: { user } } = await db.auth.getUser();
-            if (!user) return;
+            if (!currentAuthUser) return;
             
-            document.getElementById('profile-email').value = user.email;
-            document.getElementById('profile-role').value = currentUserProfile.is_admin ? '管理员 (Admin)' : '普通成员 (Member)';
+            document.getElementById('profile-email').value = currentAuthUser.email;
+            document.getElementById('profile-role').value = currentUserProfile.is_admin ? '🛡️ 管理员 (Admin)' : '👤 普通成员 (Member)';
             document.getElementById('profile-nickname').value = currentUserProfile.nickname;
             
+            loadNotifications(currentAuthUser.id);
+
             document.getElementById('forum-section').classList.add('hidden');
             document.getElementById('profile-section').classList.remove('hidden');
+        }
+
+        async function loadNotifications(userId) {
+            const container = document.getElementById('notifications-list');
+            const { data } = await db.from('notifications').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+            
+            if (!data || data.length === 0) {
+                container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">暂无任何系统通知</p>';
+                return;
+            }
+
+            container.innerHTML = '';
+            data.forEach(notif => {
+                const div = document.createElement('div');
+                div.className = 'card';
+                div.style.cssText = `padding: 10px; margin-bottom: 8px; font-size: 13px; ${notif.is_read ? '' : 'border-left: 3px solid var(--primary-color);'}`;
+                div.innerHTML = `
+                    <div class="flex" style="margin-bottom:4px;">
+                        <b>${notif.title}</b>
+                        <span style="font-size:11px; color:var(--meta-color);">${new Date(notif.created_at).toLocaleString()}</span>
+                    </div>
+                    <p style="margin:0;">${notif.content}</p>
+                `;
+                container.appendChild(div);
+            });
+
+            // 标记所有为已读
+            await db.from('notifications').update({ is_read: true }).eq('user_id', userId).eq('is_read', false);
+            document.getElementById('notification-badge').classList.add('hidden');
         }
 
         window.closeProfile = function() {
@@ -196,8 +257,7 @@
             const msgEl = document.getElementById('profile-msg');
             if (!newNickname) return alert('昵称不能为空！');
 
-            const { data: { user } } = await db.auth.getUser();
-            const { error } = await db.from('profiles').update({ nickname: newNickname }).eq('id', user.id);
+            const { error } = await db.from('profiles').update({ nickname: newNickname }).eq('id', currentAuthUser.id);
 
             if (error) {
                 msgEl.style.color = 'red';
@@ -270,19 +330,95 @@
         async function loadTopics(categoryId) {
             const { data } = await db.from('topics').select('*').eq('category_id', categoryId).order('created_at', { ascending: false });
             const container = document.getElementById('topics-container');
-            container.innerHTML = (data && data.length) ? '' : '<p style="color:var(--meta-color)">暂无话题，快来发布第一条吧！</p>';
-            if (!data) return;
+            container.innerHTML = '';
             
+            if (!data || data.length === 0) {
+                container.innerHTML = '<p style="color:var(--meta-color)">暂无话题，快来发布第一条吧！</p>';
+                return;
+            }
+
+            const isAdmin = currentUserProfile && currentUserProfile.is_admin;
+            let visibleCount = 0;
+
             data.forEach(topic => {
+                // 如果帖子被隐藏（警告限流），非管理员且非本人则不显示
+                const isOwner = currentAuthUser && currentAuthUser.id === topic.user_id;
+                if (topic.is_hidden && !isAdmin && !isOwner) return;
+
+                visibleCount++;
                 const div = document.createElement('div');
-                div.className = 'card';
+                div.className = 'card' + (topic.is_hidden ? ' warning-card' : '');
+                
+                let adminControls = '';
+                if (isAdmin) {
+                    adminControls = `
+                        <div style="display:flex; gap:6px;">
+                            ${topic.is_hidden ? 
+                                `<button onclick="window.restoreTopic('${topic.id}')" style="background:#3182ce; padding:4px 8px; font-size:11px;">解除警告</button>` : 
+                                `<button onclick="window.warnTopic('${topic.id}', '${topic.user_id}')" style="background:#d69e2e; padding:4px 8px; font-size:11px;">警告限流</button>`
+                            }
+                            <button onclick="window.deleteTopic('${topic.id}')" style="background:#e53e3e; padding:4px 8px; font-size:11px;">删除</button>
+                        </div>
+                    `;
+                }
+
                 div.innerHTML = `
-                    <h4 style="margin:0 0 8px 0;">${topic.title}</h4>
-                    <p style="font-size:14px; margin:0 0 10px 0;">${topic.content}</p>
-                    <span style="font-size:12px; color:var(--meta-color);">发布者: ${topic.user_name} | 时间: ${new Date(topic.created_at).toLocaleString()}</span>
+                    <div class="flex" style="align-items: flex-start;">
+                        <div style="flex:1;">
+                            <h4 style="margin:0 0 8px 0;">
+                                ${topic.title} 
+                                ${topic.is_hidden ? '<span style="color:red; font-size:11px;">[已被管理员警告限流-仅自己可见]</span>' : ''}
+                            </h4>
+                            <p style="font-size:14px; margin:0 0 10px 0;">${topic.content}</p>
+                            <span style="font-size:12px; color:var(--meta-color);">发布者: ${topic.user_name} | 时间: ${new Date(topic.created_at).toLocaleString()}</span>
+                        </div>
+                        ${adminControls}
+                    </div>
                 `;
                 container.appendChild(div);
             });
+
+            if (visibleCount === 0) {
+                container.innerHTML = '<p style="color:var(--meta-color)">暂无公开话题</p>';
+            }
+        }
+
+        // 管理员操作：删除话题
+        window.deleteTopic = async function(topicId) {
+            if (!confirm('确定要彻底删除该帖子吗？')) return;
+            const { error } = await db.from('topics').delete().eq('id', topicId);
+            if (error) alert('删除失败: ' + error.message);
+            else loadTopics(currentCategoryId);
+        }
+
+        // 管理员操作：警告限流并发送站内通知
+        window.warnTopic = async function(topicId, targetUserId) {
+            const reason = prompt('请输入警告原因（将发送至用户的个人中心通知）：', '内容涉嫌违规，已被限制为仅自己可见');
+            if (!reason) return;
+
+            // 1. 将帖子置为隐藏
+            const { error: updateError } = await db.from('topics').update({ is_hidden: true }).eq('id', topicId);
+            if (updateError) {
+                alert('操作失败: ' + updateError.message);
+                return;
+            }
+
+            // 2. 发送站内通知
+            await db.from('notifications').insert([{
+                user_id: targetUserId,
+                title: '⚠️ 社区违规警告通知',
+                content: `您发布的话题已被管理员警告并限流。原因：${reason}`
+            }]);
+
+            alert('已成功执行警告限流并向用户发送通知！');
+            loadTopics(currentCategoryId);
+        }
+
+        // 管理员操作：解除警告
+        window.restoreTopic = async function(topicId) {
+            const { error } = await db.from('topics').update({ is_hidden: false }).eq('id', topicId);
+            if (error) alert('操作失败: ' + error.message);
+            else loadTopics(currentCategoryId);
         }
 
         window.createTopic = async function() {
@@ -290,15 +426,13 @@
             const content = document.getElementById('topic-content').value;
             if (!title || !content || !currentCategoryId) return alert('请填写完整标题和内容！');
 
-            // 发布时直接使用用户在个人中心设置的自定义昵称
             const username = currentUserProfile ? currentUserProfile.nickname : '匿名同学';
-
-            const { data: { user } } = await db.auth.getUser();
             const { error } = await db.from('topics').insert([{
                 category_id: currentCategoryId,
-                user_id: user.id,
+                user_id: currentAuthUser.id,
                 user_name: username,
-                title, content
+                title, content,
+                is_hidden: false
             }]);
 
             if (error) {
