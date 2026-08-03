@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>海高论坛</title>
+    <title>海高论坛 - 校园社区</title>
     <!-- 引入 Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -15,6 +15,7 @@
             --primary-color: #3182ce;
             --meta-color: #718096;
             --hover-bg: #ebf8ff;
+            --admin-badge: #e53e3e;
         }
         [data-theme="dark"] {
             --bg-color: #1a202c;
@@ -24,6 +25,7 @@
             --primary-color: #63b3ed;
             --meta-color: #a0aec0;
             --hover-bg: #2b6cb0;
+            --admin-badge: #fc8181;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -32,7 +34,7 @@
             margin: 0; padding: 20px;
             box-sizing: border-box;
         }
-        .container { max-width: 900px; margin: 0 auto; }
+        .container { max-width: 950px; margin: 0 auto; }
         .card {
             background: var(--card-bg);
             border: 1px solid var(--border-color);
@@ -55,21 +57,16 @@
         button:hover { opacity: 0.9; }
         .flex { display: flex; justify-content: space-between; align-items: center; }
         
-        /* 版块高亮选中样式 */
         .category-item {
-            padding: 10px 12px;
-            cursor: pointer;
-            border-radius: 6px;
-            margin-bottom: 6px;
-            font-weight: 500;
-            transition: background 0.2s, color 0.2s;
+            padding: 10px 12px; cursor: pointer; border-radius: 6px;
+            margin-bottom: 6px; font-weight: 500; transition: background 0.2s, color 0.2s;
         }
-        .category-item:hover {
-            background-color: var(--hover-bg);
-        }
-        .category-item.active {
-            background-color: var(--primary-color);
-            color: white;
+        .category-item:hover { background-color: var(--hover-bg); }
+        .category-item.active { background-color: var(--primary-color); color: white; }
+
+        .badge-admin {
+            background-color: var(--admin-badge); color: white;
+            font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle;
         }
     </style>
 </head>
@@ -77,7 +74,6 @@
     <div class="container">
         <!-- 登录/注册面板 -->
         <div id="auth-section" class="card" style="max-width: 400px; margin: 50px auto; position: relative;">
-            <!-- 登录页右上角主题切换按钮 -->
             <button onclick="window.toggleTheme()" style="position: absolute; top: 20px; right: 20px; background: none; border: 1px solid var(--border-color); color: var(--text-color); padding: 5px 10px; font-size: 12px;">🌓 主题</button>
             
             <h2>校园论坛登录 / 注册</h2>
@@ -94,8 +90,12 @@
         <!-- 论坛主界面 -->
         <div id="forum-section" class="hidden">
             <div class="card flex">
-                <h2 style="margin:0;">🎓 校园交流社区</h2>
                 <div>
+                    <h2 style="margin:0;">🎓 校园交流社区</h2>
+                    <span id="user-profile-summary" style="font-size: 12px; color: var(--meta-color);">加载中...</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="window.openProfile()" style="background:#4a5568;">个人中心</button>
                     <button onclick="window.toggleTheme()" style="background:none; border:1px solid var(--border-color); color:var(--text-color);">🌓 主题</button>
                     <button onclick="window.handleLogout()" style="background:#e53e3e;">退出</button>
                 </div>
@@ -121,6 +121,26 @@
                 </div>
             </div>
         </div>
+
+        <!-- 个人中心弹窗面板 -->
+        <div id="profile-section" class="card hidden" style="max-width: 500px; margin: 30px auto;">
+            <h3>个人中心</h3>
+            <p style="font-size: 13px; color: var(--meta-color);">在此修改你的社区昵称与查看账号身份</p>
+            <label style="font-size: 12px;">绑定邮箱：</label>
+            <input type="text" id="profile-email" disabled style="background: var(--bg-color);">
+            
+            <label style="font-size: 12px;">当前身份：</label>
+            <input type="text" id="profile-role" disabled style="background: var(--bg-color);">
+
+            <label style="font-size: 12px;">修改昵称：</label>
+            <input type="text" id="profile-nickname" placeholder="输入新的昵称...">
+            
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button onclick="window.updateProfile()" style="flex:1;">保存修改</button>
+                <button onclick="window.closeProfile()" style="flex:1; background-color: #718096;">返回论坛</button>
+            </div>
+            <p id="profile-msg" style="color: green; font-size: 13px; margin-top: 10px;"></p>
+        </div>
     </div>
 
     <script>
@@ -131,23 +151,71 @@
         const db = window.sbApp;
 
         let currentCategoryId = null;
+        let currentUserProfile = null;
 
         db.auth.getSession().then(({ data: { session } }) => {
-            if (session) showForum();
+            if (session) initUserSession(session.user);
         });
+
+        async function initUserSession(user) {
+            // 获取用户的 Profile 详细信息（昵称、管理员身份）
+            const { data } = await db.from('profiles').select('*').eq('id', user.id).single();
+            currentUserProfile = data || { nickname: user.email.split('@')[0], is_admin: false };
+            
+            const roleText = currentUserProfile.is_admin ? '🛡️ 管理员' : '👤 普通成员';
+            document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${currentUserProfile.nickname}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
+            
+            showForum();
+        }
 
         function showForum() {
             document.getElementById('auth-section').classList.add('hidden');
+            document.getElementById('profile-section').classList.add('hidden');
             document.getElementById('forum-section').classList.remove('hidden');
             loadCategories();
+        }
+
+        window.openProfile = async function() {
+            const { data: { user } } = await db.auth.getUser();
+            if (!user) return;
+            
+            document.getElementById('profile-email').value = user.email;
+            document.getElementById('profile-role').value = currentUserProfile.is_admin ? '管理员 (Admin)' : '普通成员 (Member)';
+            document.getElementById('profile-nickname').value = currentUserProfile.nickname;
+            
+            document.getElementById('forum-section').classList.add('hidden');
+            document.getElementById('profile-section').classList.remove('hidden');
+        }
+
+        window.closeProfile = function() {
+            showForum();
+        }
+
+        window.updateProfile = async function() {
+            const newNickname = document.getElementById('profile-nickname').value.trim();
+            const msgEl = document.getElementById('profile-msg');
+            if (!newNickname) return alert('昵称不能为空！');
+
+            const { data: { user } } = await db.auth.getUser();
+            const { error } = await db.from('profiles').update({ nickname: newNickname }).eq('id', user.id);
+
+            if (error) {
+                msgEl.style.color = 'red';
+                msgEl.innerText = '更新失败: ' + error.message;
+            } else {
+                msgEl.style.color = 'green';
+                msgEl.innerText = '昵称修改成功！';
+                currentUserProfile.nickname = newNickname;
+                document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${newNickname}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
+            }
         }
 
         window.handleLogin = async function() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            const { error } = await db.auth.signInWithPassword({ email, password });
+            const { data, error } = await db.auth.signInWithPassword({ email, password });
             if (error) document.getElementById('auth-msg').innerText = error.message;
-            else showForum();
+            else initUserSession(data.user);
         }
 
         window.handleRegister = async function() {
@@ -176,15 +244,12 @@
             container.innerHTML = '';
             if (!data) return;
             
-            data.forEach((cat, index) => {
+            data.forEach((cat) => {
                 const div = document.createElement('div');
                 div.className = 'category-item';
                 div.innerText = `# ${cat.name}`;
                 div.dataset.id = cat.id;
-                
-                div.onclick = () => {
-                    selectCategory(cat.id);
-                };
+                div.onclick = () => selectCategory(cat.id);
                 container.appendChild(div);
             });
 
@@ -193,20 +258,12 @@
             }
         }
 
-        // 切换板块并更新高亮样式
         function selectCategory(categoryId) {
             currentCategoryId = categoryId;
-            
-            // 遍历所有板块 DOM，切换 active 样式
-            const items = document.querySelectorAll('.category-item');
-            items.forEach(item => {
-                if (item.dataset.id == categoryId) {
-                    item.classList.add('active');
-                } else {
-                    item.classList.remove('active');
-                }
+            document.querySelectorAll('.category-item').forEach(item => {
+                if (item.dataset.id == categoryId) item.classList.add('active');
+                else item.classList.remove('active');
             });
-
             loadTopics(categoryId);
         }
 
@@ -215,6 +272,7 @@
             const container = document.getElementById('topics-container');
             container.innerHTML = (data && data.length) ? '' : '<p style="color:var(--meta-color)">暂无话题，快来发布第一条吧！</p>';
             if (!data) return;
+            
             data.forEach(topic => {
                 const div = document.createElement('div');
                 div.className = 'card';
@@ -232,10 +290,10 @@
             const content = document.getElementById('topic-content').value;
             if (!title || !content || !currentCategoryId) return alert('请填写完整标题和内容！');
 
-            const { data: { user } } = await db.auth.getUser();
-            if (!user) return alert('请先登录！');
-            const username = user.email.split('@')[0];
+            // 发布时直接使用用户在个人中心设置的自定义昵称
+            const username = currentUserProfile ? currentUserProfile.nickname : '匿名同学';
 
+            const { data: { user } } = await db.auth.getUser();
             const { error } = await db.from('topics').insert([{
                 category_id: currentCategoryId,
                 user_id: user.id,
