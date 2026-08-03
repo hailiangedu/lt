@@ -101,6 +101,29 @@
         .profile-row label {
             width: 80px; font-size: 12px; color: var(--meta-color); flex-shrink: 0;
         }
+
+        /* 针对移动端屏幕（<=768px）进行字体精简与美化，PC端完全不受影响 */
+        @media (max-width: 768px) {
+            body {
+                font-size: 14px;
+                padding: 10px;
+            }
+            h2 { font-size: 1.3rem; }
+            h3 { font-size: 1.1rem; }
+            h4 { font-size: 1rem; }
+            .card {
+                padding: 12px;
+                margin-bottom: 10px;
+            }
+            input, textarea, select, button {
+                font-size: 13px;
+                padding: 8px;
+            }
+            .profile-row label {
+                font-size: 11px;
+                width: 70px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -110,8 +133,8 @@
             <button onclick="window.toggleTheme()" style="position: absolute; top: 20px; right: 20px; background: none; border: 1px solid var(--border-color); color: var(--text-color); padding: 5px 10px; font-size: 12px;">🌓 主题</button>
             
             <h2>海高论坛登录 / 注册</h2>
-            <p style="font-size: 13px; color: var(--meta-color);">支持 QQ 邮箱与 Gmail 后缀注册</p>
-            <input type="email" id="email" placeholder="请输入 QQ邮箱 或 Gmail">
+            <p style="font-size: 13px; color: var(--meta-color);">支持 QQ 邮箱与 Gmail 邮箱注册</p>
+            <input type="email" id="email" placeholder="请输入邮箱地址">
             <input type="password" id="password" placeholder="请输入密码 (至少6位)">
             <div style="display: flex; gap: 10px;">
                 <button onclick="window.handleLogin()" style="flex:1;">登录</button>
@@ -136,7 +159,7 @@
                 </div>
             </div>
             
-            <div style="display: flex; gap: 20px;">
+            <div style="display: flex; gap: 20px;" class="main-layout">
                 <!-- 左侧板块导航 -->
                 <div style="width: 25%;">
                     <div class="card">
@@ -203,12 +226,12 @@
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
 
             <!-- 自定义背景设置（本地存储，不占云端空间） -->
-            <h4 style="margin: 0 0 6px 0;">🖼️ 自定义背景设置</h4>
-            <p style="font-size:12px; color:var(--meta-color); margin-bottom:8px;">上传本地图片将直接保存在浏览器本地（LocalStorage），不占用云端存储空间：</p>
+            <h4 style="margin: 0 0 6px 0;">自定义背景设置</h4>
+            <p style="font-size:12px; color:var(--meta-color); margin-bottom:8px;">上传本地图片将保存在本地，各会话相互独立：</p>
             <input type="file" id="bg-file-input" accept="image/*" style="margin-bottom:8px;">
             <div style="display: flex; gap: 8px; margin-bottom: 15px;">
                 <button onclick="window.saveCustomBackground()" style="padding: 6px 12px; font-size:12px; flex:1;">应用并保存背景</button>
-                <button onclick="window.resetCustomBackground()" style="background:#718096; padding: 6px 12px; font-size:12px; flex:1;">恢复默认 (beijing.png)</button>
+                <button onclick="window.resetCustomBackground()" style="background:#718096; padding: 6px 12px; font-size:12px; flex:1;">恢复默认</button>
             </div>
 
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
@@ -499,7 +522,8 @@
             data.forEach((cat) => {
                 const div = document.createElement('div');
                 div.className = 'category-item';
-                div.innerText = `# ${cat.name}`;
+                // 已删除板块名称前的 # 标识符
+                div.innerText = `${cat.name}`;
                 div.dataset.id = cat.id;
                 div.onclick = () => selectCategory(cat.id);
                 container.appendChild(div);
