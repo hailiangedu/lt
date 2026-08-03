@@ -105,13 +105,13 @@
         const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
         
-        // 防重复声明初始化
-        window.supabaseClient = window.supabaseClient || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        const supabase = window.supabaseClient;
+        // 使用一个独立的命名空间对象避免全局变量名冲突
+        window.sbApp = window.sbApp || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const db = window.sbApp;
 
         let currentCategoryId = null;
 
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        db.auth.getSession().then(({ data: { session } }) => {
             if (session) showForum();
         });
 
@@ -124,7 +124,7 @@
         window.handleLogin = async function() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
-            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            const { error } = await db.auth.signInWithPassword({ email, password });
             if (error) document.getElementById('auth-msg').innerText = error.message;
             else showForum();
         }
@@ -139,18 +139,18 @@
                 return;
             }
 
-            const { error } = await supabase.auth.signUp({ email, password });
+            const { error } = await db.auth.signUp({ email, password });
             if (error) msgEl.innerText = error.message;
             else alert('注册成功！请查收邮件验证。');
         }
 
         window.handleLogout = async function() {
-            await supabase.auth.signOut();
+            await db.auth.signOut();
             location.reload();
         }
 
         async function loadCategories() {
-            const { data } = await supabase.from('categories').select('*');
+            const { data } = await db.from('categories').select('*');
             const container = document.getElementById('categories-list');
             container.innerHTML = '';
             if (!data) return;
@@ -171,7 +171,7 @@
         }
 
         async function loadTopics(categoryId) {
-            const { data } = await supabase.from('topics').select('*').eq('category_id', categoryId).order('created_at', { ascending: false });
+            const { data } = await db.from('topics').select('*').eq('category_id', categoryId).order('created_at', { ascending: false });
             const container = document.getElementById('topics-container');
             container.innerHTML = (data && data.length) ? '' : '<p style="color:var(--meta-color)">暂无话题，快来发布第一条吧！</p>';
             if (!data) return;
@@ -192,11 +192,11 @@
             const content = document.getElementById('topic-content').value;
             if (!title || !content || !currentCategoryId) return alert('请填写完整标题和内容！');
 
-            const { data: { user } } = await supabase.auth.getUser();
+            const { data: { user } } = await db.auth.getUser();
             if (!user) return alert('请先登录！');
             const username = user.email.split('@')[0];
 
-            const { error } = await supabase.from('topics').insert([{
+            const { error } = await db.from('topics').insert([{
                 category_id: currentCategoryId,
                 user_id: user.id,
                 user_name: username,
