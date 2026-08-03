@@ -74,6 +74,11 @@
             background-color: var(--warning-bg) !important;
             border-left: 4px solid var(--admin-badge);
         }
+        .clickable-name {
+            color: var(--primary-color);
+            cursor: pointer;
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -97,7 +102,7 @@
         <div id="forum-section" class="hidden">
             <div class="card flex">
                 <div>
-                    <h2 style="margin:0;">🎓海高论坛</h2>
+                    <h2 style="margin:0;">🎓 海高论坛</h2>
                     <span id="user-profile-summary" style="font-size: 12px; color: var(--meta-color);">加载中...</span>
                 </div>
                 <div style="display: flex; gap: 8px;">
@@ -160,6 +165,15 @@
 
             <div style="margin-top: 20px; text-align: right;">
                 <button onclick="window.closeProfile()" style="background-color: #718096; padding: 8px 20px;">返回论坛</button>
+            </div>
+        </div>
+
+        <!-- 查看他人公开资料弹窗 -->
+        <div id="user-modal" class="card hidden" style="max-width: 400px; margin: 100px auto; position: fixed; top: 20%; left: 50%; transform: translateX(-50%); z-index: 1000; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+            <h3>用户公开资料</h3>
+            <div id="modal-user-content">加载中...</div>
+            <div style="margin-top: 15px; text-align: right;">
+                <button onclick="window.closeUserModal()" style="background:#718096; padding: 6px 14px;">关闭</button>
             </div>
         </div>
     </div>
@@ -243,7 +257,6 @@
                 container.appendChild(div);
             });
 
-            // 标记所有为已读
             await db.from('notifications').update({ is_read: true }).eq('user_id', userId).eq('is_read', false);
             document.getElementById('notification-badge').classList.add('hidden');
         }
@@ -268,6 +281,30 @@
                 currentUserProfile.nickname = newNickname;
                 document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${newNickname}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
             }
+        }
+
+        // 点击发布者昵称查看其公开资料
+        window.viewUserProfile = async function(userId) {
+            const modal = document.getElementById('user-modal');
+            const content = document.getElementById('modal-user-content');
+            content.innerHTML = '加载中...';
+            modal.classList.remove('hidden');
+
+            const { data, error } = await db.from('profiles').select('*').eq('id', userId).single();
+            if (error || !data) {
+                content.innerHTML = '<p style="color:red; font-size:13px;">未找到该用户资料或已被注销</p>';
+                return;
+            }
+
+            content.innerHTML = `
+                <p style="font-size:13px; margin: 6px 0;"><b>昵称：</b> ${data.nickname}</p>
+                <p style="font-size:13px; margin: 6px 0;"><b>身份：</b> ${data.is_admin ? '🛡️ 管理员' : '👤 普通成员'}</p>
+                <p style="font-size:13px; margin: 6px 0;"><b>注册邮箱：</b> ${data.email ? data.email.replace(/(.{2}).*(@.*)/, '$1***$2') : '保密'}</p>
+            `;
+        }
+
+        window.closeUserModal = function() {
+            document.getElementById('user-modal').classList.add('hidden');
         }
 
         window.handleLogin = async function() {
@@ -340,10 +377,9 @@
             const isAdmin = currentUserProfile && currentUserProfile.is_admin;
             let visibleCount = 0;
 
-            data.forEach(topic => {
-                // 如果帖子被隐藏（警告限流），非管理员且非本人则不显示
+            for (const topic of data) {
                 const isOwner = currentAuthUser && currentAuthUser.id === topic.user_id;
-                if (topic.is_hidden && !isAdmin && !isOwner) return;
+                if (topic.is_hidden && !isAdmin && !isOwner) continue;
 
                 visibleCount++;
                 const div = document.createElement('div');
@@ -370,20 +406,96 @@
                                 ${topic.is_hidden ? '<span style="color:red; font-size:11px;">[已被管理员警告限流-仅自己可见]</span>' : ''}
                             </h4>
                             <p style="font-size:14px; margin:0 0 10px 0;">${topic.content}</p>
-                            <span style="font-size:12px; color:var(--meta-color);">发布者: ${topic.user_name} | 时间: ${new Date(topic.created_at).toLocaleString()}</span>
+                            <span style="font-size:12px; color:var(--meta-color);">
+                                发布者: <span class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${topic.user_name}</span> 
+                                | 时间: ${new Date(topic.created_at).toLocaleString()}
+                            </span>
                         </div>
                         ${adminControls}
                     </div>
+
+                    <!-- 评论/回复区域 -->
+                    <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0 10px 0;">
+                    <div style="font-size: 13px;">
+                        <div id="comments-list-${topic.id}" style="margin-bottom: 10px;">加载回复中...</div>
+                        <div style="display: flex; gap: 8px;">
+                            <input type="text" id="comment-input-${topic.id}" placeholder="写下你的回复..." style="margin-bottom:0; font-size:13px; padding:6px 10px;">
+                            <button onclick="window.createComment('${topic.id}')" style="padding: 6px 12px; font-size: 13px; white-space: nowrap;">回复</button>
+                        </div>
+                    </div>
                 `;
                 container.appendChild(div);
-            });
+
+                // 异步加载该帖子的评论
+                loadComments(topic.id);
+            }
 
             if (visibleCount === 0) {
                 container.innerHTML = '<p style="color:var(--meta-color)">暂无公开话题</p>';
             }
         }
 
-        // 管理员操作：删除话题
+        async function loadComments(topicId) {
+            const container = document.getElementById(`comments-list-${topicId}`);
+            if (!container) return;
+
+            const { data } = await db.from('comments').select('*').eq('topic_id', topicId).order('created_at', { ascending: true });
+            if (!data || data.length === 0) {
+                container.innerHTML = '<span style="color:var(--meta-color); font-size:12px;">暂无回复，快来抢沙发吧~</span>';
+                return;
+            }
+
+            container.innerHTML = '';
+            const isAdmin = currentUserProfile && currentUserProfile.is_admin;
+
+            data.forEach(comm => {
+                const isCommOwner = currentAuthUser && currentAuthUser.id === comm.user_id;
+                const cDiv = document.createElement('div');
+                cDiv.style.cssText = 'background:var(--bg-color); padding: 8px 10px; border-radius:6px; margin-bottom: 6px; font-size:12px;';
+                
+                let delBtn = '';
+                if (isCommOwner || isAdmin) {
+                    delBtn = `<span class="clickable-name" style="color:#e53e3e; float:right;" onclick="window.deleteComment('${comm.id}', '${topicId}')">删除</span>`;
+                }
+
+                cDiv.innerHTML = `
+                    ${delBtn}
+                    <b><span class="clickable-name" onclick="window.viewUserProfile('${comm.user_id}')">${comm.user_name}</span></b>: 
+                    <span>${comm.content}</span>
+                    <div style="color:var(--meta-color); font-size:10px; margin-top:2px;">${new Date(comm.created_at).toLocaleString()}</div>
+                `;
+                container.appendChild(cDiv);
+            });
+        }
+
+        window.createComment = async function(topicId) {
+            const input = document.getElementById(`comment-input-${topicId}`);
+            const content = input.value.trim();
+            if (!content) return alert('回复内容不能为空！');
+
+            const username = currentUserProfile ? currentUserProfile.nickname : '匿名同学';
+            const { error } = await db.from('comments').insert([{
+                topic_id: topicId,
+                user_id: currentAuthUser.id,
+                user_name: username,
+                content: content
+            }]);
+
+            if (error) {
+                alert('回复失败: ' + error.message);
+            } else {
+                input.value = '';
+                loadComments(topicId);
+            }
+        }
+
+        window.deleteComment = async function(commentId, topicId) {
+            if (!confirm('确定要删除这条回复吗？')) return;
+            const { error } = await db.from('comments').delete().eq('id', commentId);
+            if (error) alert('删除失败: ' + error.message);
+            else loadComments(topicId);
+        }
+
         window.deleteTopic = async function(topicId) {
             if (!confirm('确定要彻底删除该帖子吗？')) return;
             const { error } = await db.from('topics').delete().eq('id', topicId);
@@ -391,19 +503,16 @@
             else loadTopics(currentCategoryId);
         }
 
-        // 管理员操作：警告限流并发送站内通知
         window.warnTopic = async function(topicId, targetUserId) {
             const reason = prompt('请输入警告原因（将发送至用户的个人中心通知）：', '内容涉嫌违规，已被限制为仅自己可见');
             if (!reason) return;
 
-            // 1. 将帖子置为隐藏
             const { error: updateError } = await db.from('topics').update({ is_hidden: true }).eq('id', topicId);
             if (updateError) {
                 alert('操作失败: ' + updateError.message);
                 return;
             }
 
-            // 2. 发送站内通知
             await db.from('notifications').insert([{
                 user_id: targetUserId,
                 title: '⚠️ 社区违规警告通知',
@@ -414,7 +523,6 @@
             loadTopics(currentCategoryId);
         }
 
-        // 管理员操作：解除警告
         window.restoreTopic = async function(topicId) {
             const { error } = await db.from('topics').update({ is_hidden: false }).eq('id', topicId);
             if (error) alert('操作失败: ' + error.message);
