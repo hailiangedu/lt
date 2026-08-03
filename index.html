@@ -63,8 +63,8 @@
             <input type="email" id="email" placeholder="请输入 QQ邮箱 或 Gmail">
             <input type="password" id="password" placeholder="请输入密码 (至少6位)">
             <div style="display: flex; gap: 10px;">
-                <button onclick="handleLogin()" style="flex:1;">登录</button>
-                <button onclick="handleRegister()" style="flex:1; background-color:#2b6cb0;">注册</button>
+                <button onclick="window.handleLogin()" style="flex:1;">登录</button>
+                <button onclick="window.handleRegister()" style="flex:1; background-color:#2b6cb0;">注册</button>
             </div>
             <p id="auth-msg" style="color: red; font-size: 13px; margin-top: 10px;"></p>
         </div>
@@ -74,8 +74,8 @@
             <div class="card flex">
                 <h2 style="margin:0;">🎓 校园交流社区</h2>
                 <div>
-                    <button onclick="toggleTheme()" style="background:none; border:1px solid var(--border-color); color:var(--text-color);">🌓 主题</button>
-                    <button onclick="handleLogout()" style="background:#e53e3e;">退出</button>
+                    <button onclick="window.toggleTheme()" style="background:none; border:1px solid var(--border-color); color:var(--text-color);">🌓 主题</button>
+                    <button onclick="window.handleLogout()" style="background:#e53e3e;">退出</button>
                 </div>
             </div>
             
@@ -93,7 +93,7 @@
                         <h3>发表新话题</h3>
                         <input type="text" id="topic-title" placeholder="话题标题...">
                         <textarea id="topic-content" rows="3" placeholder="分享你的新鲜事、求助或闲置信息..."></textarea>
-                        <button onclick="createTopic()">发布话题</button>
+                        <button onclick="window.createTopic()">发布话题</button>
                     </div>
                     <div id="topics-container"></div>
                 </div>
@@ -104,7 +104,10 @@
     <script>
         const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
-        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        // 防重复声明初始化
+        window.supabaseClient = window.supabaseClient || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const supabase = window.supabaseClient;
 
         let currentCategoryId = null;
 
@@ -118,7 +121,7 @@
             loadCategories();
         }
 
-        async function handleLogin() {
+        window.handleLogin = async function() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -126,7 +129,7 @@
             else showForum();
         }
 
-        async function handleRegister() {
+        window.handleRegister = async function() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const msgEl = document.getElementById('auth-msg');
@@ -141,7 +144,7 @@
             else alert('注册成功！请查收邮件验证。');
         }
 
-        async function handleLogout() {
+        window.handleLogout = async function() {
             await supabase.auth.signOut();
             location.reload();
         }
@@ -184,7 +187,7 @@
             });
         }
 
-        async function createTopic() {
+        window.createTopic = async function() {
             const title = document.getElementById('topic-title').value;
             const content = document.getElementById('topic-content').value;
             if (!title || !content || !currentCategoryId) return alert('请填写完整标题和内容！');
@@ -209,7 +212,7 @@
             }
         }
 
-        function toggleTheme() {
+        window.toggleTheme = function() {
             const current = document.documentElement.getAttribute('data-theme');
             document.documentElement.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
         }
