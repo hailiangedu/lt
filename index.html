@@ -36,13 +36,11 @@
             color: var(--text-color);
             margin: 0; padding: 20px;
             box-sizing: border-box;
-            /* 完美应用背景图（默认 beijing.png，支持 LocalStorage 动态覆盖） */
             background-image: var(--custom-bg);
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
         }
-        /* 修复遮罩层过厚遮挡背景图的问题：加入低透明度保护文本辨识度，同时让背景完美透出 */
         body::before {
             content: "";
             position: fixed;
@@ -103,10 +101,10 @@
             width: 80px; font-size: 12px; color: var(--meta-color); flex-shrink: 0;
         }
 
-        /* 移动端屏幕（<=768px）：字体与间距进一步缩小，PC端保持绝对不变 */
+        /* 移动端屏幕（<=768px）：字体与间距缩小，PC端保持绝对不变 */
         @media (max-width: 768px) {
             body {
-                font-size: 12px; /* 进一步缩小整体字号 */
+                font-size: 12px;
                 padding: 6px;
             }
             h2 { font-size: 1.1rem; }
@@ -126,7 +124,6 @@
                 font-size: 11px;
                 width: 65px;
             }
-            /* 移动端侧边栏与主区域改为上下堆叠布局更紧凑 */
             .main-layout {
                 flex-direction: column !important;
                 gap: 10px !important;
@@ -208,15 +205,19 @@
             <h3>个人中心与详细资料</h3>
             <p style="font-size: 13px; color: var(--meta-color);">完善个人资料，勾选复选框可控制信息是否向其他用户公开</p>
             
-            <div style="display: flex; gap: 15px; margin-bottom: 12px;">
+            <div style="display: flex; gap: 15px; margin-bottom: 12px; align-items: center;">
                 <div style="flex: 1;">
                     <label style="font-size: 12px; color:var(--meta-color);">绑定邮箱：</label>
-                    <input type="text" id="profile-email" disabled style="background: var(--bg-color);">
+                    <input type="text" id="profile-email" disabled style="background: var(--bg-color); margin-bottom:0;">
                 </div>
-                <div style="flex: 1;">
-                    <label style="font-size: 12px; color:var(--meta-color);">当前身份：</label>
-                    <input type="text" id="profile-role" disabled style="background: var(--bg-color);">
+                <div style="padding-top: 18px;">
+                    <label style="font-size: 11px;"><input type="checkbox" id="pub-email"> 完全公开邮箱</label>
                 </div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <label style="font-size: 12px; color:var(--meta-color);">当前身份：</label>
+                <input type="text" id="profile-role" disabled style="background: var(--bg-color);">
             </div>
 
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
@@ -236,7 +237,16 @@
 
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
 
-            <!-- 自定义背景设置（本地存储，修复生效 Bug） -->
+            <!-- 修改密码功能区块 -->
+            <h4 style="margin: 0 0 6px 0;">🔒 账号密码修改</h4>
+            <p style="font-size:12px; color:var(--meta-color); margin-bottom:8px;">请输入您的新密码（至少 6 位字符）：</p>
+            <input type="password" id="new-password" placeholder="请输入新密码..." style="margin-bottom:8px;">
+            <button onclick="window.updatePassword()" style="background:#d69e2e; padding: 6px 14px; font-size:12px; width:100%;">确认修改密码</button>
+            <p id="password-msg" style="font-size: 12px; margin: 6px 0 0 0; text-align:center;"></p>
+
+            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
+
+            <!-- 自定义背景设置 -->
             <h4 style="margin: 0 0 6px 0;">🖼️ 自定义背景设置</h4>
             <p style="font-size:12px; color:var(--meta-color); margin-bottom:8px;">上传本地图片将直接保存在浏览器本地（LocalStorage），不占用云端存储空间：</p>
             <input type="file" id="bg-file-input" accept="image/*" style="margin-bottom:8px;">
@@ -276,7 +286,6 @@
         let currentUserProfile = null;
         let currentAuthUser = null;
 
-        // 初始化加载本地自定义背景（修复无法生效的 Bug）
         function initCustomBackground() {
             const savedBg = localStorage.getItem('forum_custom_bg');
             if (savedBg) {
@@ -292,7 +301,8 @@
         async function initUserSession(user) {
             currentAuthUser = user;
             const { data } = await db.from('profiles').select('*').eq('id', user.id).single();
-            currentUserProfile = data || { nickname: user.email.split('@')[0], is_admin: false };
+            currentUserProfile = data || { nickname: user.email.split('@')[0], is_admin: false, email: user.email };
+            if(!currentUserProfile.email) currentUserProfile.email = user.email;
             
             document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${currentUserProfile.nickname}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
             
@@ -331,6 +341,7 @@
             document.getElementById('p-constellation').value = currentUserProfile.constellation || '';
             document.getElementById('p-hometown').value = currentUserProfile.hometown || '';
 
+            document.getElementById('pub-email').checked = !!currentUserProfile.public_email;
             document.getElementById('pub-real-name').checked = !!currentUserProfile.public_real_name;
             document.getElementById('pub-phone').checked = !!currentUserProfile.public_phone;
             document.getElementById('pub-gender').checked = currentUserProfile.public_gender !== false;
@@ -377,7 +388,6 @@
             showForum();
         }
 
-        // 自定义背景保存方法（修复失效问题）
         window.saveCustomBackground = function() {
             const fileInput = document.getElementById('bg-file-input');
             if (fileInput.files && fileInput.files[0]) {
@@ -395,12 +405,33 @@
             }
         };
 
-        // 恢复默认背景方法
         window.resetCustomBackground = function() {
             localStorage.removeItem('forum_custom_bg');
             document.documentElement.style.setProperty('--custom-bg', "url('beijing.png')");
             document.getElementById('bg-file-input').value = '';
             alert('已成功恢复默认背景 (beijing.png)');
+        };
+
+        // 修改密码执行函数
+        window.updatePassword = async function() {
+            const newPassword = document.getElementById('new-password').value;
+            const msgEl = document.getElementById('password-msg');
+
+            if (!newPassword || newPassword.length < 6) {
+                msgEl.style.color = 'red';
+                msgEl.innerText = '新密码长度不能少于 6 位字符！';
+                return;
+            }
+
+            const { error } = await db.auth.updateUser({ password: newPassword });
+            if (error) {
+                msgEl.style.color = 'red';
+                msgEl.innerText = '密码修改失败: ' + error.message;
+            } else {
+                msgEl.style.color = 'green';
+                msgEl.innerText = '密码修改成功！下次登录请使用新密码。';
+                document.getElementById('new-password').value = '';
+            }
         };
 
         window.updateProfile = async function() {
@@ -418,6 +449,7 @@
                 constellation: document.getElementById('p-constellation').value.trim(),
                 hometown: document.getElementById('p-hometown').value.trim(),
 
+                public_email: document.getElementById('pub-email').checked,
                 public_real_name: document.getElementById('pub-real-name').checked,
                 public_phone: document.getElementById('pub-phone').checked,
                 public_gender: document.getElementById('pub-gender').checked,
@@ -469,7 +501,7 @@
                 html += `<p style="font-size:13px; margin: 5px 0;"><b>生日：</b> ${data.birthday || '未填写'}</p>`;
                 html += `<p style="font-size:13px; margin: 5px 0;"><b>星座：</b> ${data.constellation || '未填写'}</p>`;
                 html += `<p style="font-size:13px; margin: 5px 0;"><b>故乡：</b> ${data.hometown || '未填写'}</p>`;
-                html += `<p style="font-size:13px; margin: 5px 0; color:var(--meta-color);"><b>注册邮箱：</b> ${data.email || '保密'}</p>`;
+                html += `<p style="font-size:13px; margin: 5px 0; color:var(--meta-color);"><b>注册邮箱：</b> ${data.email || currentAuthUser?.email || '保密'}</p>`;
             } else {
                 if (data.public_real_name && data.real_name) html += `<p style="font-size:13px; margin: 5px 0;"><b>真实姓名：</b> ${data.real_name}</p>`;
                 if (data.public_phone && data.phone) html += `<p style="font-size:13px; margin: 5px 0;"><b>手机号：</b> ${data.phone}</p>`;
@@ -479,7 +511,12 @@
                 if (data.public_constellation !== false && data.constellation) html += `<p style="font-size:13px; margin: 5px 0;"><b>星座：</b> ${data.constellation}</p>`;
                 if (data.public_hometown !== false && data.hometown) html += `<p style="font-size:13px; margin: 5px 0;"><b>故乡：</b> ${data.hometown}</p>`;
                 
-                html += `<p style="font-size:13px; margin: 5px 0;"><b>注册邮箱：</b> ${data.email ? data.email.replace(/(.{2}).*(@.*)/, '$1***$2') : '保密'}</p>`;
+                // 邮箱展示控制：勾选完全公开显示原邮箱，未勾选则保持原有的部分打码隐藏格式
+                const rawEmail = data.email || (userId === currentAuthUser?.id ? currentAuthUser.email : '');
+                if (rawEmail) {
+                    const displayEmail = data.public_email ? rawEmail : rawEmail.replace(/(.{2}).*(@.*)/, '$1***$2');
+                    html += `<p style="font-size:13px; margin: 5px 0;"><b>注册邮箱：</b> ${displayEmail}</p>`;
+                }
             }
 
             content.innerHTML = html;
