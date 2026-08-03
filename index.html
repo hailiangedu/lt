@@ -14,6 +14,7 @@
             --border-color: #e2e8f0;
             --primary-color: #3182ce;
             --meta-color: #718096;
+            --hover-bg: #ebf8ff;
         }
         [data-theme="dark"] {
             --bg-color: #1a202c;
@@ -22,6 +23,7 @@
             --border-color: #4a5568;
             --primary-color: #63b3ed;
             --meta-color: #a0aec0;
+            --hover-bg: #2b6cb0;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -52,12 +54,32 @@
         }
         button:hover { opacity: 0.9; }
         .flex { display: flex; justify-content: space-between; align-items: center; }
+        
+        /* 版块高亮选中样式 */
+        .category-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            border-radius: 6px;
+            margin-bottom: 6px;
+            font-weight: 500;
+            transition: background 0.2s, color 0.2s;
+        }
+        .category-item:hover {
+            background-color: var(--hover-bg);
+        }
+        .category-item.active {
+            background-color: var(--primary-color);
+            color: white;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <!-- 登录/注册面板 -->
-        <div id="auth-section" class="card" style="max-width: 400px; margin: 50px auto;">
+        <div id="auth-section" class="card" style="max-width: 400px; margin: 50px auto; position: relative;">
+            <!-- 登录页右上角主题切换按钮 -->
+            <button onclick="window.toggleTheme()" style="position: absolute; top: 20px; right: 20px; background: none; border: 1px solid var(--border-color); color: var(--text-color); padding: 5px 10px; font-size: 12px;">🌓 主题</button>
+            
             <h2>校园论坛登录 / 注册</h2>
             <p style="font-size: 13px; color: var(--meta-color);">支持 QQ 邮箱与 Gmail 后缀注册</p>
             <input type="email" id="email" placeholder="请输入 QQ邮箱 或 Gmail">
@@ -105,7 +127,6 @@
         const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
         const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
         
-        // 使用一个独立的命名空间对象避免全局变量名冲突
         window.sbApp = window.sbApp || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const db = window.sbApp;
 
@@ -154,20 +175,39 @@
             const container = document.getElementById('categories-list');
             container.innerHTML = '';
             if (!data) return;
-            data.forEach(cat => {
+            
+            data.forEach((cat, index) => {
                 const div = document.createElement('div');
-                div.style.cssText = 'padding: 8px; cursor: pointer; border-radius: 4px; margin-bottom: 4px;';
+                div.className = 'category-item';
                 div.innerText = `# ${cat.name}`;
+                div.dataset.id = cat.id;
+                
                 div.onclick = () => {
-                    currentCategoryId = cat.id;
-                    loadTopics(cat.id);
+                    selectCategory(cat.id);
                 };
                 container.appendChild(div);
             });
+
             if (data.length > 0) {
-                currentCategoryId = data[0].id;
-                loadTopics(data[0].id);
+                selectCategory(data[0].id);
             }
+        }
+
+        // 切换板块并更新高亮样式
+        function selectCategory(categoryId) {
+            currentCategoryId = categoryId;
+            
+            // 遍历所有板块 DOM，切换 active 样式
+            const items = document.querySelectorAll('.category-item');
+            items.forEach(item => {
+                if (item.dataset.id == categoryId) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+
+            loadTopics(categoryId);
         }
 
         async function loadTopics(categoryId) {
