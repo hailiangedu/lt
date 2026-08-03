@@ -23,9 +23,10 @@
             --text-color: #e2e8f0;
             --card-bg: #2d3748;
             --border-color: #4a5568;
-            --primary-color: #63b3ed;
+            /* 优化：将暗色模式下的高亮/主色换成柔和的Slate灰蓝色，避免原先纯蓝的突兀感 */
+            --primary-color: #94a3b8;
             --meta-color: #a0aec0;
-            --hover-bg: #2d3748;
+            --hover-bg: #334155;
             --admin-badge: #fc8181;
             --warning-bg: #2d1a1a;
         }
@@ -141,6 +142,18 @@
             </div>
         </div>
 
+        <!-- 编辑话题弹窗 -->
+        <div id="edit-modal" class="card hidden" style="max-width: 500px; margin: 100px auto; position: fixed; top: 15%; left: 50%; transform: translateX(-50%); z-index: 1000; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
+            <h3 style="margin-top:0;">编辑话题</h3>
+            <input type="hidden" id="edit-topic-id">
+            <input type="text" id="edit-topic-title" placeholder="修改标题...">
+            <textarea id="edit-topic-content" rows="4" placeholder="修改内容..."></textarea>
+            <div style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 8px;">
+                <button onclick="window.closeEditModal()" style="background:#718096; padding: 6px 14px;">取消</button>
+                <button onclick="window.saveEditedTopic()" style="padding: 6px 14px;">保存修改</button>
+            </div>
+        </div>
+
         <!-- 个人中心及详细资料面板 -->
         <div id="profile-section" class="card hidden" style="max-width: 650px; margin: 20px auto;">
             <h3>个人中心与详细资料</h3>
@@ -240,7 +253,6 @@
             document.getElementById('profile-email').value = currentAuthUser.email;
             document.getElementById('profile-role').value = currentUserProfile.is_admin ? '🛡️ 管理员 (Admin)' : '👤 普通成员 (Member)';
             
-            // 填充现有字段
             document.getElementById('p-nickname').value = currentUserProfile.nickname || '';
             document.getElementById('p-real-name').value = currentUserProfile.real_name || '';
             document.getElementById('p-phone').value = currentUserProfile.phone || '';
@@ -333,7 +345,6 @@
             }
         }
 
-        // 查看用户信息（支持管理员查看完整隐私信息）
         window.viewUserProfile = async function(userId) {
             const modal = document.getElementById('user-modal');
             const content = document.getElementById('modal-user-content');
@@ -354,7 +365,6 @@
             html += `<p style="font-size:13px; margin: 5px 0;"><b>身份：</b> ${data.is_admin ? '🛡️ 管理员' : '👤 普通成员'}</p>`;
             
             if (isAdmin) {
-                // 管理员可看到所有完整信息
                 html += `<hr style="border:0; border-top:1px dashed var(--border-color); margin: 8px 0;">`;
                 html += `<p style="font-size:12px; color:var(--admin-badge); margin: 3px 0;"><b>[管理员特权视图 - 忽略隐私设置]</b></p>`;
                 html += `<p style="font-size:13px; margin: 5px 0;"><b>真实姓名：</b> ${data.real_name || '未填写'}</p>`;
@@ -366,7 +376,6 @@
                 html += `<p style="font-size:13px; margin: 5px 0;"><b>故乡：</b> ${data.hometown || '未填写'}</p>`;
                 html += `<p style="font-size:13px; margin: 5px 0; color:var(--meta-color);"><b>注册邮箱：</b> ${data.email || '保密'}</p>`;
             } else {
-                // 普通用户按隐私设置显示
                 if (data.public_real_name && data.real_name) html += `<p style="font-size:13px; margin: 5px 0;"><b>真实姓名：</b> ${data.real_name}</p>`;
                 if (data.public_phone && data.phone) html += `<p style="font-size:13px; margin: 5px 0;"><b>手机号：</b> ${data.phone}</p>`;
                 if (data.public_gender !== false && data.gender) html += `<p style="font-size:13px; margin: 5px 0;"><b>性别：</b> ${data.gender}</p>`;
@@ -463,17 +472,31 @@
                 const div = document.createElement('div');
                 div.className = 'card' + (topic.is_hidden ? ' warning-card' : '');
                 
-                let adminControls = '';
-                if (isAdmin) {
-                    adminControls = `
+                // 优化：赋予普通用户（自己帖子的所有者）或管理员 删除/编辑 权限
+                let actionControls = '';
+                let ownerOrAdminControls = '';
+                
+                if (isOwner || isAdmin) {
+                    ownerOrAdminControls = `
                         <div style="display:flex; gap:6px;">
+                            ${isOwner ? `<button onclick="window.openEditModal('${topic.id}', \`${topic.title.replace(/[`'\\]/g, '\\$&')}\`, \`${topic.content.replace(/[`'\\]/g, '\\$&')}\`)" style="background:#718096; padding:4px 8px; font-size:11px;">编辑</button>` : ''}
+                            <button onclick="window.deleteTopic('${topic.id}')" style="background:#e53e3e; padding:4px 8px; font-size:11px;">删除</button>
+                        </div>
+                    `;
+                }
+
+                if (isAdmin) {
+                    actionControls = `
+                        <div style="display:flex; gap:6px; align-items:center;">
                             ${topic.is_hidden ? 
                                 `<button onclick="window.restoreTopic('${topic.id}')" style="background:#3182ce; padding:4px 8px; font-size:11px;">解除警告</button>` : 
                                 `<button onclick="window.warnTopic('${topic.id}', '${topic.user_id}')" style="background:#d69e2e; padding:4px 8px; font-size:11px;">警告限流</button>`
                             }
-                            <button onclick="window.deleteTopic('${topic.id}')" style="background:#e53e3e; padding:4px 8px; font-size:11px;">删除</button>
+                            ${ownerOrAdminControls}
                         </div>
                     `;
+                } else if (isOwner) {
+                    actionControls = ownerOrAdminControls;
                 }
 
                 div.innerHTML = `
@@ -489,7 +512,7 @@
                                 | 时间: ${new Date(topic.created_at).toLocaleString()}
                             </span>
                         </div>
-                        ${adminControls}
+                        ${actionControls}
                     </div>
 
                     <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0 10px 0;">
@@ -507,6 +530,35 @@
 
             if (visibleCount === 0) {
                 container.innerHTML = '<p style="color:var(--meta-color)">暂无公开话题</p>';
+            }
+        }
+
+        // 打开编辑话题弹窗
+        window.openEditModal = function(topicId, title, content) {
+            document.getElementById('edit-topic-id').value = topicId;
+            document.getElementById('edit-topic-title').value = title;
+            document.getElementById('edit-topic-content').value = content;
+            document.getElementById('edit-modal').classList.remove('hidden');
+        }
+
+        window.closeEditModal = function() {
+            document.getElementById('edit-modal').classList.add('hidden');
+        }
+
+        // 保存编辑后的话题
+        window.saveEditedTopic = async function() {
+            const topicId = document.getElementById('edit-topic-id').value;
+            const title = document.getElementById('edit-topic-title').value.trim();
+            const content = document.getElementById('edit-topic-content').value.trim();
+
+            if (!title || !content) return alert('标题和内容不能为空！');
+
+            const { error } = await db.from('topics').update({ title, content }).eq('id', topicId);
+            if (error) {
+                alert('修改失败: ' + error.message);
+            } else {
+                window.closeEditModal();
+                loadTopics(currentCategoryId);
             }
         }
 
@@ -572,7 +624,7 @@
         }
 
         window.deleteTopic = async function(topicId) {
-            if (!confirm('确定要彻底删除该帖子吗？')) return;
+            if (!confirm('确定要删除该帖子吗？')) return;
             const { error } = await db.from('topics').delete().eq('id', topicId);
             if (error) alert('删除失败: ' + error.message);
             else loadTopics(currentCategoryId);
