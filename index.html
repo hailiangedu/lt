@@ -12,7 +12,8 @@
             --text-color: #2d3748;
             --card-bg: #ffffff;
             --border-color: #e2e8f0;
-            --primary-color: #3182ce;
+            /* 优化：将明亮模式的主色调/高亮调整为更有质感、辨识度更高的经典专业蓝 */
+            --primary-color: #2b6cb0;
             --meta-color: #718096;
             --hover-bg: #ebf8ff;
             --admin-badge: #e53e3e;
@@ -23,7 +24,7 @@
             --text-color: #e2e8f0;
             --card-bg: #2d3748;
             --border-color: #4a5568;
-            /* 优化：将暗色模式下的高亮/主色换成柔和的Slate灰蓝色，避免原先纯蓝的突兀感 */
+            /* 暗色模式保持柔和的Slate灰蓝色，避免纯蓝刺眼 */
             --primary-color: #94a3b8;
             --meta-color: #a0aec0;
             --hover-bg: #334155;
@@ -100,7 +101,7 @@
             <input type="password" id="password" placeholder="请输入密码 (至少6位)">
             <div style="display: flex; gap: 10px;">
                 <button onclick="window.handleLogin()" style="flex:1;">登录</button>
-                <button onclick="window.handleRegister()" style="flex:1; background-color:#2b6cb0;">注册</button>
+                <button onclick="window.handleRegister()" style="flex:1; background-color:#3182ce;">注册</button>
             </div>
             <p id="auth-msg" style="color: red; font-size: 13px; margin-top: 10px;"></p>
         </div>
@@ -412,9 +413,17 @@
                 return;
             }
 
-            const { error } = await db.auth.signUp({ email, password });
+            // 配套修改：指定 emailRedirectTo 指向新建的 confirm.html 页面地址
+            const { error } = await db.auth.signUp({ 
+                email, 
+                password,
+                options: {
+                    emailRedirectTo: 'https://hailiangedu.github.io/lt/confirm.html'
+                }
+            });
+            
             if (error) msgEl.innerText = error.message;
-            else alert('注册成功！请查收邮件验证。');
+            else alert('注册成功！确认邮件已发送，请查收并点击确认。');
         }
 
         window.handleLogout = async function() {
@@ -472,7 +481,6 @@
                 const div = document.createElement('div');
                 div.className = 'card' + (topic.is_hidden ? ' warning-card' : '');
                 
-                // 优化：赋予普通用户（自己帖子的所有者）或管理员 删除/编辑 权限
                 let actionControls = '';
                 let ownerOrAdminControls = '';
                 
@@ -533,7 +541,6 @@
             }
         }
 
-        // 打开编辑话题弹窗
         window.openEditModal = function(topicId, title, content) {
             document.getElementById('edit-topic-id').value = topicId;
             document.getElementById('edit-topic-title').value = title;
@@ -545,7 +552,6 @@
             document.getElementById('edit-modal').classList.add('hidden');
         }
 
-        // 保存编辑后的话题
         window.saveEditedTopic = async function() {
             const topicId = document.getElementById('edit-topic-id').value;
             const title = document.getElementById('edit-topic-title').value.trim();
