@@ -10,13 +10,14 @@
         :root {
             --bg-color: #f4f6f8;
             --text-color: #2d3748;
-            --card-bg: rgba(255, 255, 255, 0.92); /* 卡片加入轻微半透明，融合背景 */
+            --card-bg: rgba(255, 255, 255, 0.92);
             --border-color: #e2e8f0;
             --primary-color: #2b6cb0;
             --meta-color: #718096;
             --hover-bg: #ebf8ff;
             --admin-badge: #e53e3e;
             --warning-bg: #fff5f5;
+            --custom-bg: url('beijing.png');
         }
         [data-theme="dark"] {
             --bg-color: #1a202c;
@@ -35,19 +36,19 @@
             color: var(--text-color);
             margin: 0; padding: 20px;
             box-sizing: border-box;
-            /* 默认引入同级 beijing.png 作为背景，支持自定义背景变量覆盖 */
-            background-image: var(--custom-bg-image, url('beijing.png'));
+            /* 完美应用背景图（默认 beijing.png，支持 LocalStorage 动态覆盖） */
+            background-image: var(--custom-bg);
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
         }
-        /* 90% 透明度的整体沉浸背景遮罩层 */
+        /* 修复遮罩层过厚遮挡背景图的问题：加入低透明度保护文本辨识度，同时让背景完美透出 */
         body::before {
             content: "";
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
             background-color: var(--bg-color);
-            opacity: 0.9;
+            opacity: 0.65;
             z-index: -1;
             pointer-events: none;
         }
@@ -59,7 +60,7 @@
             padding: 20px;
             margin-bottom: 15px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            backdrop-filter: blur(4px); /* 磨砂玻璃质感 */
+            backdrop-filter: blur(4px);
         }
         .hidden { display: none !important; }
         input, textarea, select {
@@ -102,26 +103,36 @@
             width: 80px; font-size: 12px; color: var(--meta-color); flex-shrink: 0;
         }
 
-        /* 针对移动端屏幕（<=768px）进行字体精简与美化，PC端完全不受影响 */
+        /* 移动端屏幕（<=768px）：字体与间距进一步缩小，PC端保持绝对不变 */
         @media (max-width: 768px) {
             body {
-                font-size: 14px;
-                padding: 10px;
+                font-size: 12px; /* 进一步缩小整体字号 */
+                padding: 6px;
             }
-            h2 { font-size: 1.3rem; }
-            h3 { font-size: 1.1rem; }
-            h4 { font-size: 1rem; }
+            h2 { font-size: 1.1rem; }
+            h3 { font-size: 0.95rem; }
+            h4 { font-size: 0.85rem; }
             .card {
-                padding: 12px;
-                margin-bottom: 10px;
+                padding: 10px;
+                margin-bottom: 8px;
+                border-radius: 6px;
             }
             input, textarea, select, button {
-                font-size: 13px;
-                padding: 8px;
+                font-size: 12px;
+                padding: 6px 8px;
+                margin-bottom: 6px;
             }
             .profile-row label {
                 font-size: 11px;
-                width: 70px;
+                width: 65px;
+            }
+            /* 移动端侧边栏与主区域改为上下堆叠布局更紧凑 */
+            .main-layout {
+                flex-direction: column !important;
+                gap: 10px !important;
+            }
+            .main-layout > div {
+                width: 100% !important;
             }
         }
     </style>
@@ -133,8 +144,8 @@
             <button onclick="window.toggleTheme()" style="position: absolute; top: 20px; right: 20px; background: none; border: 1px solid var(--border-color); color: var(--text-color); padding: 5px 10px; font-size: 12px;">🌓 主题</button>
             
             <h2>海高论坛登录 / 注册</h2>
-            <p style="font-size: 13px; color: var(--meta-color);">支持 QQ 邮箱与 Gmail 邮箱注册</p>
-            <input type="email" id="email" placeholder="请输入邮箱地址">
+            <p style="font-size: 13px; color: var(--meta-color);">支持 QQ 邮箱与 Gmail 后缀注册</p>
+            <input type="email" id="email" placeholder="请输入 QQ邮箱 或 Gmail">
             <input type="password" id="password" placeholder="请输入密码 (至少6位)">
             <div style="display: flex; gap: 10px;">
                 <button onclick="window.handleLogin()" style="flex:1;">登录</button>
@@ -225,13 +236,13 @@
 
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
 
-            <!-- 自定义背景设置（本地存储，不占云端空间） -->
-            <h4 style="margin: 0 0 6px 0;">自定义背景设置</h4>
-            <p style="font-size:12px; color:var(--meta-color); margin-bottom:8px;">上传本地图片将保存在本地，各会话相互独立：</p>
+            <!-- 自定义背景设置（本地存储，修复生效 Bug） -->
+            <h4 style="margin: 0 0 6px 0;">🖼️ 自定义背景设置</h4>
+            <p style="font-size:12px; color:var(--meta-color); margin-bottom:8px;">上传本地图片将直接保存在浏览器本地（LocalStorage），不占用云端存储空间：</p>
             <input type="file" id="bg-file-input" accept="image/*" style="margin-bottom:8px;">
             <div style="display: flex; gap: 8px; margin-bottom: 15px;">
                 <button onclick="window.saveCustomBackground()" style="padding: 6px 12px; font-size:12px; flex:1;">应用并保存背景</button>
-                <button onclick="window.resetCustomBackground()" style="background:#718096; padding: 6px 12px; font-size:12px; flex:1;">恢复默认</button>
+                <button onclick="window.resetCustomBackground()" style="background:#718096; padding: 6px 12px; font-size:12px; flex:1;">恢复默认 (beijing.png)</button>
             </div>
 
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
@@ -265,11 +276,11 @@
         let currentUserProfile = null;
         let currentAuthUser = null;
 
-        // 初始化加载本地自定义背景
+        // 初始化加载本地自定义背景（修复无法生效的 Bug）
         function initCustomBackground() {
             const savedBg = localStorage.getItem('forum_custom_bg');
             if (savedBg) {
-                document.documentElement.style.setProperty('--custom-bg-image', `url(${savedBg})`);
+                document.documentElement.style.setProperty('--custom-bg', `url(${savedBg})`);
             }
         }
         initCustomBackground();
@@ -366,7 +377,7 @@
             showForum();
         }
 
-        // 自定义背景保存方法（Base64 存入 LocalStorage）
+        // 自定义背景保存方法（修复失效问题）
         window.saveCustomBackground = function() {
             const fileInput = document.getElementById('bg-file-input');
             if (fileInput.files && fileInput.files[0]) {
@@ -375,7 +386,7 @@
                 reader.onload = function(e) {
                     const base64Image = e.target.result;
                     localStorage.setItem('forum_custom_bg', base64Image);
-                    document.documentElement.style.setProperty('--custom-bg-image', `url(${base64Image})`);
+                    document.documentElement.style.setProperty('--custom-bg', `url(${base64Image})`);
                     alert('自定义背景应用并保存成功！');
                 };
                 reader.readAsDataURL(file);
@@ -387,7 +398,7 @@
         // 恢复默认背景方法
         window.resetCustomBackground = function() {
             localStorage.removeItem('forum_custom_bg');
-            document.documentElement.style.removeProperty('--custom-bg-image');
+            document.documentElement.style.setProperty('--custom-bg', "url('beijing.png')");
             document.getElementById('bg-file-input').value = '';
             alert('已成功恢复默认背景 (beijing.png)');
         };
@@ -522,7 +533,6 @@
             data.forEach((cat) => {
                 const div = document.createElement('div');
                 div.className = 'category-item';
-                // 已删除板块名称前的 # 标识符
                 div.innerText = `${cat.name}`;
                 div.dataset.id = cat.id;
                 div.onclick = () => selectCategory(cat.id);
@@ -597,7 +607,7 @@
                                 ${topic.title} 
                                 ${topic.is_hidden ? '<span style="color:red; font-size:11px;">[已被管理员警告限流-仅自己可见]</span>' : ''}
                             </h4>
-                            <p style="font-size:14px; margin:0 0 10px 0;">${topic.content}</p>
+                            <p style="margin:0 0 10px 0;">${topic.content}</p>
                             <span style="font-size:12px; color:var(--meta-color);">
                                 发布者: <span class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${topic.user_name}</span> 
                                 | 时间: ${new Date(topic.created_at).toLocaleString()}
@@ -610,8 +620,8 @@
                     <div style="font-size: 13px;">
                         <div id="comments-list-${topic.id}" style="margin-bottom: 10px;">加载回复中...</div>
                         <div style="display: flex; gap: 8px;">
-                            <input type="text" id="comment-input-${topic.id}" placeholder="写下你的回复..." style="margin-bottom:0; font-size:13px; padding:6px 10px;">
-                            <button onclick="window.createComment('${topic.id}')" style="padding: 6px 12px; font-size: 13px; white-space: nowrap;">回复</button>
+                            <input type="text" id="comment-input-${topic.id}" placeholder="写下你的回复..." style="margin-bottom:0; padding:6px 10px;">
+                            <button onclick="window.createComment('${topic.id}')" style="padding: 6px 12px; white-space: nowrap;">回复</button>
                         </div>
                     </div>
                 `;
@@ -667,7 +677,7 @@
             data.forEach(comm => {
                 const isCommOwner = currentAuthUser && currentAuthUser.id === comm.user_id;
                 const cDiv = document.createElement('div');
-                cDiv.style.cssText = 'background:var(--bg-color); padding: 8px 10px; border-radius:6px; margin-bottom: 6px; font-size:12px;';
+                cDiv.style.cssText = 'background:var(--bg-color); padding: 8px 10px; border-radius:6px; margin-bottom: 6px;';
                 
                 let commentControls = '';
                 if (isCommOwner || isAdmin) {
@@ -691,7 +701,6 @@
             });
         }
 
-        // 快捷引用并@某位评论用户
         window.replyToUser = function(topicId, targetUserName) {
             const input = document.getElementById(`comment-input-${topicId}`);
             if (!input) return;
