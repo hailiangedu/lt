@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>邮箱验证中 - 海高论坛</title>
+    <!-- 引入 Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f4f6f8;
+            color: #2d3748;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .card {
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h3 id="status-title">正在验证邮箱...</h3>
+        <p id="status-desc" style="color: #718096; font-size: 14px;">请稍候，正在为您处理登录凭证。</p>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
+        
+        const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            const titleEl = document.getElementById('status-title');
+            const descEl = document.getElementById('status-desc');
+
+            // Supabase 2.x 会自动捕获并解析 URL Hash (例如 #access_token=...) 中的凭证
+            const { data: { session }, error } = await db.auth.getSession();
+
+            if (error) {
+                titleEl.innerText = '验证失败或链接已失效';
+                titleEl.style.color = '#e53e3e';
+                descEl.innerText = error.message;
+            } else if (session) {
+                titleEl.innerText = '验证成功！';
+                titleEl.style.color = '#38a169';
+                descEl.innerText = '正在为您跳转回论坛首页...';
+                
+                // 延迟 1.5 秒后自动跳转回主页
+                setTimeout(() => {
+                    window.location.href = './index.html';
+                }, 1500);
+            } else {
+                titleEl.innerText = '无效的请求';
+                descEl.style.color = '#d69e2e';
+                descEl.innerText = '未检测到有效的验证令牌，请重新发起注册或登录。';
+            }
+        });
+    </script>
+</body>
+</html>
