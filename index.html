@@ -10,7 +10,7 @@
         :root {
             --bg-color: #f4f6f8;
             --text-color: #2d3748;
-            --card-bg: #ffffff;
+            --card-bg: rgba(255, 255, 255, 0.92); /* 卡片加入轻微半透明，融合背景 */
             --border-color: #e2e8f0;
             --primary-color: #2b6cb0;
             --meta-color: #718096;
@@ -21,7 +21,7 @@
         [data-theme="dark"] {
             --bg-color: #1a202c;
             --text-color: #e2e8f0;
-            --card-bg: #2d3748;
+            --card-bg: rgba(45, 55, 72, 0.92);
             --border-color: #4a5568;
             --primary-color: #94a3b8;
             --meta-color: #a0aec0;
@@ -35,6 +35,21 @@
             color: var(--text-color);
             margin: 0; padding: 20px;
             box-sizing: border-box;
+            /* 默认引入同级 beijing.png 作为背景，支持自定义背景变量覆盖 */
+            background-image: var(--custom-bg-image, url('beijing.png'));
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }
+        /* 90% 透明度的整体沉浸背景遮罩层 */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: var(--bg-color);
+            opacity: 0.9;
+            z-index: -1;
+            pointer-events: none;
         }
         .container { max-width: 950px; margin: 0 auto; }
         .card {
@@ -44,6 +59,7 @@
             padding: 20px;
             margin-bottom: 15px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            backdrop-filter: blur(4px); /* 磨砂玻璃质感 */
         }
         .hidden { display: none !important; }
         input, textarea, select {
@@ -186,6 +202,17 @@
 
             <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
 
+            <!-- 自定义背景设置（本地存储，不占云端空间） -->
+            <h4 style="margin: 0 0 6px 0;">🖼️ 自定义背景设置</h4>
+            <p style="font-size:12px; color:var(--meta-color); margin-bottom:8px;">上传本地图片将直接保存在浏览器本地（LocalStorage），不占用云端存储空间：</p>
+            <input type="file" id="bg-file-input" accept="image/*" style="margin-bottom:8px;">
+            <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+                <button onclick="window.saveCustomBackground()" style="padding: 6px 12px; font-size:12px; flex:1;">应用并保存背景</button>
+                <button onclick="window.resetCustomBackground()" style="background:#718096; padding: 6px 12px; font-size:12px; flex:1;">恢复默认 (beijing.png)</button>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
+
             <h4 style="margin: 0 0 10px 0;">🔔 我的消息通知</h4>
             <div id="notifications-list" style="max-height: 200px; overflow-y: auto;">加载中...</div>
 
@@ -214,6 +241,15 @@
         let currentCategoryId = null;
         let currentUserProfile = null;
         let currentAuthUser = null;
+
+        // 初始化加载本地自定义背景
+        function initCustomBackground() {
+            const savedBg = localStorage.getItem('forum_custom_bg');
+            if (savedBg) {
+                document.documentElement.style.setProperty('--custom-bg-image', `url(${savedBg})`);
+            }
+        }
+        initCustomBackground();
 
         db.auth.getSession().then(({ data: { session } }) => {
             if (session) initUserSession(session.user);
@@ -306,6 +342,32 @@
         window.closeProfile = function() {
             showForum();
         }
+
+        // 自定义背景保存方法（Base64 存入 LocalStorage）
+        window.saveCustomBackground = function() {
+            const fileInput = document.getElementById('bg-file-input');
+            if (fileInput.files && fileInput.files[0]) {
+                const file = fileInput.files[0];
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const base64Image = e.target.result;
+                    localStorage.setItem('forum_custom_bg', base64Image);
+                    document.documentElement.style.setProperty('--custom-bg-image', `url(${base64Image})`);
+                    alert('自定义背景应用并保存成功！');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                alert('请先选择一张图片文件！');
+            }
+        };
+
+        // 恢复默认背景方法
+        window.resetCustomBackground = function() {
+            localStorage.removeItem('forum_custom_bg');
+            document.documentElement.style.removeProperty('--custom-bg-image');
+            document.getElementById('bg-file-input').value = '';
+            alert('已成功恢复默认背景 (beijing.png)');
+        };
 
         window.updateProfile = async function() {
             const nickname = document.getElementById('p-nickname').value.trim();
@@ -583,7 +645,6 @@
                 const cDiv = document.createElement('div');
                 cDiv.style.cssText = 'background:var(--bg-color); padding: 8px 10px; border-radius:6px; margin-bottom: 6px; font-size:12px;';
                 
-                // 优化：为每条评论增加一个“回复”按钮，点击时自动@该用户
                 let commentControls = '';
                 if (isCommOwner || isAdmin) {
                     commentControls += `<span class="clickable-name" style="color:#e53e3e; margin-left:10px;" onclick="window.deleteComment('${comm.id}', '${topicId}')">删除</span>`;
@@ -606,7 +667,7 @@
             });
         }
 
-        // 新增：快捷引用并@某位评论用户
+        // 快捷引用并@某位评论用户
         window.replyToUser = function(topicId, targetUserName) {
             const input = document.getElementById(`comment-input-${topicId}`);
             if (!input) return;
