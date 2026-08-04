@@ -964,6 +964,53 @@ window.viewUserProfile = async function(userId) {
 window.closeUserModal = function() {
     document.getElementById('user-modal').classList.add('hidden');
 };
+
+  // 邮箱格式校验函数（仅限非别名 QQ 与 Gmail）
+function validateEmail(email) {
+    if (!email) return { valid: false, message: "邮箱不能为空" };
+    if (email.includes('+')) {
+        return { valid: false, message: "暂不支持使用带有 '+' 号的别名邮箱注册" };
+    }
+    const lowerEmail = email.toLowerCase();
+    const qqRegex = /^[1-9]\d{4,10}@qq\.com$/;
+    const gmailRegex = /^[a-z0-9.]+@gmail\.com$/;
+
+    if (qqRegex.test(lowerEmail)) return { valid: true };
+    if (gmailRegex.test(lowerEmail)) {
+        const localPart = lowerEmail.split('@')[0];
+        if (localPart.startsWith('.') || localPart.endsWith('.') || localPart.includes('..')) {
+            return { valid: false, message: "Gmail 邮箱格式不正确" };
+        }
+        return { valid: true };
+    }
+    return { valid: false, message: "仅限非别名（无+号）的 QQ 邮箱或 Gmail 邮箱注册" };
+}
+
+// 覆盖并增强原有的注册逻辑以接入校验
+const originalHandleRegister = window.handleRegister;
+window.handleRegister = async function() {
+    const emailInput = document.getElementById('email');
+    const msgEl = document.getElementById('auth-msg');
+    if (emailInput) {
+        const email = emailInput.value.trim();
+        const check = validateEmail(email);
+        if (!check.valid) {
+            if (msgEl) {
+                msgEl.style.color = 'red';
+                msgEl.innerText = check.message;
+            } else {
+                alert(check.message);
+            }
+            return; // 拦截不符合要求的邮箱
+        }
+    }
+    // 校验通过，执行原注册逻辑
+    if (typeof originalHandleRegister === 'function') {
+        return originalHandleRegister();
+    }
+};  
+
+    
 </script>
 </body>
 </html>
