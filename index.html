@@ -366,7 +366,7 @@ function showForum() {
 window.openProfile = async function() {
     if (!currentAuthUser) return;
     document.getElementById('profile-email').value = currentAuthUser.email;
-    document.getElementById('profile-role').value = currentUserProfile.is_admin ? '🛡️ 管理员 (Admin)' : '👤 普通成员 (Member)';
+    document.getElementById('profile-role').value = currentUserProfile.is_admin ? '🛡️ 管理员 (Admin)' : '普通成员';
     document.getElementById('p-nickname').value = currentUserProfile.nickname || '';
     document.getElementById('p-real-name').value = currentUserProfile.real_name || '';
     document.getElementById('p-phone').value = currentUserProfile.phone || '';
@@ -837,7 +837,7 @@ window.deleteTopic = async function(id) {
     }
 };
 
-// 🛡️ 恢复管理员强制查看功能、邮箱公共展示或管理员特权强制展示逻辑
+// 🛡️ 管理员无视用户设置强制可见所有信息，身份文本优化为“普通成员”
 window.viewUserProfile = async function(userId) {
     const modalContent = document.getElementById('modal-user-content');
     const modalTitle = document.getElementById('modal-title');
@@ -851,23 +851,51 @@ window.viewUserProfile = async function(userId) {
     }
 
     modalTitle.innerText = `${profile.nickname || '用户'} 的个人资料`;
+    const isAdminViewer = currentUserProfile && currentUserProfile.is_admin;
     
     let html = `<div style="font-size:13px; display:flex; flex-direction:column; gap:6px;">`;
-    html += `<div><b>身份：</b>${profile.is_admin ? '🛡️ 管理员 (Admin)' : '👤 普通成员 (Member)'}</div>`;
+    html += `<div><b>身份：</b>${profile.is_admin ? '🛡️ 管理员 (Admin)' : '普通成员'}</div>`;
     
-    // 🛡️ 如果是管理员，或者用户自身勾选了 public_email，则展示邮箱
-    const canSeeEmail = (currentUserProfile && currentUserProfile.is_admin) || profile.public_email;
-    if (canSeeEmail && profile.email) {
-        html += `<div><b>绑定邮箱：</b>${profile.email} ${!profile.public_email ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+    // 邮箱展示判断：管理员强制查看或用户自主公开
+    if ((isAdminViewer || profile.public_email) && profile.email) {
+        const isBypassed = !profile.public_email && isAdminViewer;
+        html += `<div><b>绑定邮箱：</b>${profile.email} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
     }
 
-    if (profile.public_real_name && profile.real_name) html += `<div><b>真实姓名：</b>${profile.real_name}</div>`;
-    if (profile.public_phone && profile.phone) html += `<div><b>手机号：</b>${profile.phone}</div>`;
-    if (profile.public_gender !== false && profile.gender) html += `<div><b>性别：</b>${profile.gender}</div>`;
-    if (profile.public_age !== false && profile.age) html += `<div><b>年龄：</b>${profile.age}</div>`;
-    if (profile.public_birthday !== false && profile.birthday) html += `<div><b>生日：</b>${profile.birthday}</div>`;
-    if (profile.public_constellation !== false && profile.constellation) html += `<div><b>星座：</b>${profile.constellation}</div>`;
-    if (profile.public_hometown !== false && profile.hometown) html += `<div><b>故乡：</b>${profile.hometown}</div>`;
+    if ((isAdminViewer || profile.public_real_name) && profile.real_name) {
+        const isBypassed = !profile.public_real_name && isAdminViewer;
+        html += `<div><b>真实姓名：</b>${profile.real_name} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+    }
+
+    if ((isAdminViewer || profile.public_phone) && profile.phone) {
+        const isBypassed = !profile.public_phone && isAdminViewer;
+        html += `<div><b>手机号：</b>${profile.phone} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+    }
+
+    if ((isAdminViewer || profile.public_gender !== false) && profile.gender) {
+        const isBypassed = profile.public_gender === false && isAdminViewer;
+        html += `<div><b>性别：</b>${profile.gender} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+    }
+
+    if ((isAdminViewer || profile.public_age !== false) && profile.age) {
+        const isBypassed = profile.public_age === false && isAdminViewer;
+        html += `<div><b>年龄：</b>${profile.age} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+    }
+
+    if ((isAdminViewer || profile.public_birthday !== false) && profile.birthday) {
+        const isBypassed = profile.public_birthday === false && isAdminViewer;
+        html += `<div><b>生日：</b>${profile.birthday} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+    }
+
+    if ((isAdminViewer || profile.public_constellation !== false) && profile.constellation) {
+        const isBypassed = profile.public_constellation === false && isAdminViewer;
+        html += `<div><b>星座：</b>${profile.constellation} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+    }
+
+    if ((isAdminViewer || profile.public_hometown !== false) && profile.hometown) {
+        const isBypassed = profile.public_hometown === false && isAdminViewer;
+        html += `<div><b>故乡：</b>${profile.hometown} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+    }
     
     html += `</div>`;
     modalContent.innerHTML = html;
