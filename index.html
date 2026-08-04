@@ -618,7 +618,6 @@ async function loadCategories() {
     }
 }
 
-// 🛡️ 最终完美渲染：评论区用户名支持点击查看资料，对标发帖者
 async function loadTopics(categoryId) {
     const container = document.getElementById('topics-container');
     container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
@@ -838,6 +837,7 @@ window.deleteTopic = async function(id) {
     }
 };
 
+// 🛡️ 恢复管理员强制查看功能、邮箱公共展示或管理员特权强制展示逻辑
 window.viewUserProfile = async function(userId) {
     const modalContent = document.getElementById('modal-user-content');
     const modalTitle = document.getElementById('modal-title');
@@ -854,7 +854,13 @@ window.viewUserProfile = async function(userId) {
     
     let html = `<div style="font-size:13px; display:flex; flex-direction:column; gap:6px;">`;
     html += `<div><b>身份：</b>${profile.is_admin ? '🛡️ 管理员 (Admin)' : '👤 普通成员 (Member)'}</div>`;
-    if (profile.public_email && profile.email) html += `<div><b>绑定邮箱：</b>${profile.email}</div>`;
+    
+    // 🛡️ 如果是管理员，或者用户自身勾选了 public_email，则展示邮箱
+    const canSeeEmail = (currentUserProfile && currentUserProfile.is_admin) || profile.public_email;
+    if (canSeeEmail && profile.email) {
+        html += `<div><b>绑定邮箱：</b>${profile.email} ${!profile.public_email ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+    }
+
     if (profile.public_real_name && profile.real_name) html += `<div><b>真实姓名：</b>${profile.real_name}</div>`;
     if (profile.public_phone && profile.phone) html += `<div><b>手机号：</b>${profile.phone}</div>`;
     if (profile.public_gender !== false && profile.gender) html += `<div><b>性别：</b>${profile.gender}</div>`;
