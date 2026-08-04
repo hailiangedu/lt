@@ -549,6 +549,45 @@ window.handleLogin = async function() {
     }
 };
 
+function validateEmail(email) {
+    // 1. 检查是否包含 '+' 号（别名）
+    if (email.includes('+')) {
+        return { valid: false, message: "暂不支持使用带有 '+' 号的别名邮箱注册" };
+    }
+
+    // 2. 转换为小写以便匹配
+    const lowerEmail = email.toLowerCase();
+
+    // 3. 校验是否为 QQ 邮箱或 Gmail 邮箱，且排除非法格式
+    // QQ 邮箱：数字串 @qq.com
+    const qqRegex = /^[1-9]\d{4,10}@qq\.com$/;
+    
+    // Gmail 邮箱：用户名 @gmail.com（Gmail 用户名中本身不允许加号，但可能包含点号）
+    const gmailRegex = /^[a-z0-9.]+@gmail\.com$/;
+
+    if (qqRegex.test(lowerEmail)) {
+        return { valid: true };
+    }
+    
+    if (gmailRegex.test(lowerEmail)) {
+        // 额外确保 Gmail 本地部分不包含连续的点或以点开头/结尾（标准严格校验）
+        const localPart = lowerEmail.split('@')[0];
+        if (localPart.startsWith('.') || localPart.endsWith('.') || localPart.includes('..')) {
+            return { valid: false, message: "Gmail 邮箱格式不正确" };
+        }
+        return { valid: true };
+    }
+
+    return { valid: false, message: "目前仅支持非别名（无+号）的 QQ 邮箱或 Gmail 邮箱注册" };
+}
+
+
+
+
+
+
+
+    
 window.handleRegister = async function() {
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
@@ -562,11 +601,24 @@ window.handleRegister = async function() {
         return;
     }
     const { data, error } = await db.auth.signUp({ email, password });
+async function handleRegister(email, password) {
+    // 执行邮箱规则校验
+    const check = validateEmail(email);
+    if (!check.valid) {
+        alert(check.message); // 或展示在页面提示区域
+        return;
+    }
+
+    // 校验通过，继续执行 Supabase 注册逻辑
+    const { data, error } = await supabase.auth.signUp({
+        email: email,
+        password: password,
+    });
+
     if (error) {
-        msgEl.innerText = '注册失败: ' + error.message;
+        alert("注册失败: " + error.message);
     } else {
-        msgEl.style.color = 'green';
-        msgEl.innerText = '注册成功！请查收邮件验证或直接登录。';
+        alert("注册请求已发送，请前往邮箱查收验证邮件！");
     }
 };
 
