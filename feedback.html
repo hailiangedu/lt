@@ -9,7 +9,7 @@
     <style>
         :root {
             --bg-color: #f4f6f8;
-            --card-bg: rgba(255, 255, 255, 0.45); /* 降低卡片不透明度，使背景隐隐约约可见 */
+            --card-bg: rgba(255, 255, 255, 0.45); /* 半透明卡片背景，使背景隐隐约约可见 */
             --text-color: #2d3748;
             --meta-color: #718096;
             --border-color: rgba(226, 232, 240, 0.6);
@@ -45,7 +45,7 @@
 
         .card {
             background-color: var(--card-bg);
-            /* 添加强磨砂玻璃毛玻璃特效，让背景完美隐现 */
+            /* 添加磨砂玻璃毛玻璃特效，让背景完美隐现 */
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border: 1px solid var(--border-color);
@@ -126,9 +126,9 @@
     </div>
 
     <script>
-        // 初始化主题与背景（与 index.html 的背景状态读取逻辑全面对齐）
+        // 初始化主题与自定义背景（与 index.html 的实现逻辑保持一致）
         function initThemeAndBg() {
-            // 1. 处理明暗主题
+            // 1. 同步明暗模式主题状态
             const savedTheme = localStorage.getItem('forum_theme');
             if (savedTheme === 'dark') {
                 document.documentElement.setAttribute('data-theme', 'dark');
@@ -138,22 +138,17 @@
                 document.documentElement.setAttribute('data-theme', 'dark');
             }
 
-            // 2. 匹配主页可能使用的一切背景存储键名（包括自定义图片、Base64、Blob 链接或纯色）
-            const bgType = localStorage.getItem('forum_bg_type');
-            const bgValue = localStorage.getItem('forum_bg_value') || 
-                            localStorage.getItem('custom_bg') || 
-                            localStorage.getItem('customBg') || 
-                            localStorage.getItem('bg_image') ||
-                            localStorage.getItem('backgroundImage');
+            // 2. 匹配主页的自定义背景存储键名 forum_custom_bg（同时兼容其他备用键）
+            const customBg = localStorage.getItem('forum_custom_bg') || 
+                             localStorage.getItem('custom_bg') || 
+                             localStorage.getItem('customBg') || 
+                             localStorage.getItem('bg_image');
 
-            if (bgType === 'color' && bgValue) {
-                document.body.style.backgroundColor = bgValue;
-                document.body.style.backgroundImage = 'none';
-            } else if (bgValue) {
-                // 确保对带有空格或特殊字符的 Blob / URL 进行安全包裹
-                document.body.style.backgroundImage = `url("${bgValue}")`;
+            if (customBg) {
+                // 如果用户有自定义背景，则直接应用
+                document.body.style.backgroundImage = `url("${customBg}")`;
             } else {
-                // 如果没有自定义背景，应用默认背景图片 beijing.png
+                // 否则默认加载 beijing.png
                 document.body.style.backgroundImage = "url('beijing.png')";
             }
         }
@@ -167,19 +162,9 @@
                 } else {
                     document.documentElement.removeAttribute('data-theme');
                 }
-            } else if (['forum_bg_type', 'forum_bg_value', 'custom_bg', 'customBg', 'bg_image', 'backgroundImage'].includes(event.key)) {
-                const bgType = localStorage.getItem('forum_bg_type');
-                const bgValue = localStorage.getItem('forum_bg_value') || 
-                                localStorage.getItem('custom_bg') || 
-                                localStorage.getItem('customBg') || 
-                                localStorage.getItem('bg_image') ||
-                                localStorage.getItem('backgroundImage');
-
-                if (bgType === 'color' && bgValue) {
-                    document.body.style.backgroundColor = bgValue;
-                    document.body.style.backgroundImage = 'none';
-                } else if (bgValue) {
-                    document.body.style.backgroundImage = `url("${bgValue}")`;
+            } else if (['forum_custom_bg', 'custom_bg', 'customBg', 'bg_image'].includes(event.key)) {
+                if (event.newValue) {
+                    document.body.style.backgroundImage = `url("${event.newValue}")`;
                 } else {
                     document.body.style.backgroundImage = "url('beijing.png')";
                 }
