@@ -239,12 +239,9 @@ window.togglePostMode = function() {
     const titleInput = document.getElementById('topic-title');
     const contentInput = document.getElementById('topic-content');
     const submitBtn = document.getElementById('post-submit-btn');
-    
-    // 定位到“发表新话题”卡片中的 h3 标题
     const cardTitle = document.querySelector('#forum-section .card h3');
 
     if (isTopicMode) {
-        // 切换为：发布全局通知模式
         toggleBtn.dataset.mode = 'notice';
         toggleBtn.innerText = '切换回发布话题';
         toggleBtn.style.background = '#e53e3e';
@@ -254,7 +251,6 @@ window.togglePostMode = function() {
         submitBtn.innerText = '确认群发通知';
         submitBtn.style.background = '#e53e3e';
     } else {
-        // 切换回：发表话题模式
         toggleBtn.dataset.mode = 'topic';
         toggleBtn.innerText = '切换全局通知';
         toggleBtn.style.background = '#718096';
@@ -266,14 +262,12 @@ window.togglePostMode = function() {
     }
 };
 
-// 重写原有的发布分发逻辑（兼容发布话题与群发全局通知）
+// 恢复群发通知与话题发布分发
 window.handlePostSubmit = async function() {
     const isTopicMode = document.getElementById('post-mode-toggle').dataset.mode === 'topic';
     if (isTopicMode) {
-        // 原有的发布话题逻辑
         window.createTopic();
     } else {
-        // 群发全局系统通知逻辑
         if (!currentUserProfile || !currentUserProfile.is_admin) {
             alert('权限不足！');
             return;
@@ -286,14 +280,12 @@ window.handlePostSubmit = async function() {
         }
         if (!confirm('确定要向全体注册用户发送该系统通知吗？')) return;
 
-        // 1. 获取所有用户的 ID
         const { data: profiles, error: profileErr } = await db.from('profiles').select('id');
         if (profileErr || !profiles || profiles.length === 0) {
             alert('获取用户列表失败: ' + (profileErr ? profileErr.message : '无用户'));
             return;
         }
 
-        // 2. 批量构建通知数据
         const senderName = currentUserProfile.nickname || '管理员';
         const notificationsData = profiles.map(user => ({
             user_id: user.id,
@@ -302,7 +294,6 @@ window.handlePostSubmit = async function() {
             is_read: false
         }));
 
-        // 3. 写入通知表
         const { error: insertErr } = await db.from('notifications').insert(notificationsData);
         if (insertErr) {
             alert('发布通知失败: ' + insertErr.message);
@@ -310,7 +301,6 @@ window.handlePostSubmit = async function() {
             alert(`成功向 ${profiles.length} 名用户发布了系统通知！`);
             document.getElementById('topic-title').value = '';
             document.getElementById('topic-content').value = '';
-            // 自动切回话题模式
             window.togglePostMode();
         }
     }
@@ -338,7 +328,6 @@ async function initUserSession(user) {
     document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${currentUserProfile.nickname}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
     checkUnreadNotifications(user.id);
     
-    // 正确的执行时机：在用户身份加载完毕后，控制按钮的显隐
     const toggleBtn = document.getElementById('post-mode-toggle');
     if (toggleBtn) {
         if (currentUserProfile && currentUserProfile.is_admin) {
@@ -622,13 +611,13 @@ async function loadCategories() {
     }
 }
 
+// 恢复带完整 UI、评论及回复功能的 loadTopics 渲染逻辑
 async function loadTopics(categoryId) {
     const container = document.getElementById('topics-container');
     container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
     
-    // 👉 优化点：直接查询话题表，不再强依赖外键关联，彻底解决加载空白问题
     const { data, error } = await db.from('topics')
-        .select('*')
+        .select(`*, profiles(nickname, is_admin), comments(*, profiles(nickname, is_admin), replies(*, profiles(nickname, is_admin)))`)
         .eq('category_id', categoryId)
         .order('created_at', { ascending: false });
 
@@ -641,7 +630,9 @@ async function loadTopics(categoryId) {
     for (const topic of data) {
         const div = document.createElement('div');
         div.className = 'card';
-        const authorName = topic.user_name || '匿名用户';
+        const authorName = topic.profiles ? topic.profiles.nickname : (topic.user_name || '匿名用户');
+        const isAdmin = topic.profiles && topic.profiles.is_admin;
+        const badge = isAdmin ? '<span class="badge-admin">管理员</span>' : '';
         const isOwner = currentAuthUser && currentAuthUser.id === topic.user_id;
         const ownerActions = (isOwner || (currentUserProfile && currentUserProfile.is_admin)) ? 
             `<div style="margin-top:8px; display:flex; gap:8px;">
@@ -649,15 +640,62 @@ async function loadTopics(categoryId) {
                 <button onclick="window.deleteTopic('${topic.id}')" style="background:#e53e3e; padding:4px 10px; font-size:11px;">删除</button>
              </div>` : '';
 
+        // 渲染评论列表
+        let commentsHtml = '';
+        if (topic.comments && topic.comments.length > 0) {
+            // 按时间正序排列评论
+            topic.comments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+            commentsHtml = '<div style="margin-top:12px; border-top:1px solid var(--border-color); padding-top:8px;">';
+            topic.comments.forEach(comment => {
+                const cAuthor = comment.profiles ? comment.profiles.nickname : '匿名用户';
+                const cIsAdmin = comment.profiles && comment.profiles.is_admin;
+                const cBadge = cIsAdmin ? '<span class="badge-admin">管理员</span>' : '';
+                
+                // 渲染回复列表
+                let repliesHtml = '';
+                if (comment.replies && comment.replies.length > 0) {
+                    comment.replies.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                    comment.replies.forEach(reply => {
+                        const rAuthor = reply.profiles ? reply.profiles.nickname : '匿名用户';
+                        const rIsAdmin = reply.profiles && reply.profiles.is_admin;
+                        const rBadge = rIsAdmin ? '<span class="badge-admin">管理员</span>' : '';
+                        repliesHtml += `
+                            <div style="font-size:12px; background:var(--bg-color); padding:6px 10px; margin-top:4px; border-radius:4px;">
+                                <b>${rAuthor}</b>${rBadge}: ${reply.content}
+                            </div>
+                        `;
+                    });
+                }
+
+                commentsHtml += `
+                    <div style="font-size:12px; margin-bottom:8px; padding:6px; background:var(--card-bg); border-radius:6px; border:1px solid var(--border-color);">
+                        <div><b>${cAuthor}</b>${cBadge} <span style="color:var(--meta-color); font-size:11px;">${new Date(comment.created_at).toLocaleString()}</span></div>
+                        <div style="margin:4px 0;">${comment.content}</div>
+                        ${repliesHtml}
+                        <div style="margin-top:4px;">
+                            <input type="text" id="reply-input-${comment.id}" placeholder="回复这条评论..." style="font-size:11px; padding:3px 6px; width:70%;">
+                            <button onclick="window.createReply('${comment.id}')" style="font-size:11px; padding:3px 8px;">回复</button>
+                        </div>
+                    </div>
+                `;
+            });
+            commentsHtml += '</div>';
+        }
+
         div.innerHTML = `
             <div class="flex" style="margin-bottom:6px;">
                 <span style="font-size:12px; color:var(--meta-color);">
-                    由 <b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${authorName}</b> 发布于 ${new Date(topic.created_at).toLocaleString()}
+                    由 <b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${authorName}</b>${badge} 发布于 ${new Date(topic.created_at).toLocaleString()}
                 </span>
             </div>
             <h4 style="margin:0 0 6px 0;">${topic.title}</h4>
             <p style="margin:0 0 8px 0; white-space: pre-wrap; font-size:13px;">${topic.content}</p>
             ${ownerActions}
+            ${commentsHtml}
+            <div style="margin-top:10px; display:flex; gap:6px;">
+                <input type="text" id="comment-input-${topic.id}" placeholder="发表一条友善的评论..." style="font-size:12px; padding:4px 8px; flex:1;">
+                <button onclick="window.createComment('${topic.id}')" style="font-size:12px; padding:4px 12px;">评论</button>
+            </div>
         `;
         container.appendChild(div);
     }
@@ -688,6 +726,44 @@ window.createTopic = async function() {
     } else {
         document.getElementById('topic-title').value = '';
         document.getElementById('topic-content').value = '';
+        loadTopics(currentCategoryId);
+    }
+};
+
+window.createComment = async function(topicId) {
+    const input = document.getElementById(`comment-input-${topicId}`);
+    const content = input.value.trim();
+    if (!content) return alert('评论内容不能为空！');
+    
+    const { error } = await db.from('comments').insert({
+        topic_id: topicId,
+        user_id: currentAuthUser.id,
+        content
+    });
+    
+    if (error) {
+        alert('评论失败: ' + error.message);
+    } else {
+        input.value = '';
+        loadTopics(currentCategoryId);
+    }
+};
+
+window.createReply = async function(commentId) {
+    const input = document.getElementById(`reply-input-${commentId}`);
+    const content = input.value.trim();
+    if (!content) return alert('回复内容不能为空！');
+    
+    const { error } = await db.from('replies').insert({
+        comment_id: commentId,
+        user_id: currentAuthUser.id,
+        content
+    });
+    
+    if (error) {
+        alert('回复失败: ' + error.message);
+    } else {
+        input.value = '';
         loadTopics(currentCategoryId);
     }
 };
