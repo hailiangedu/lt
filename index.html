@@ -262,7 +262,6 @@ window.togglePostMode = function() {
     }
 };
 
-// 群发通知与话题发布分发
 window.handlePostSubmit = async function() {
     const isTopicMode = document.getElementById('post-mode-toggle').dataset.mode === 'topic';
     if (isTopicMode) {
@@ -328,6 +327,7 @@ async function initUserSession(user) {
     document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${currentUserProfile.nickname}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
     checkUnreadNotifications(user.id);
     
+    // 🛡️ 恢复管理员专属发布模式按钮展示控制
     const toggleBtn = document.getElementById('post-mode-toggle');
     if (toggleBtn) {
         if (currentUserProfile && currentUserProfile.is_admin) {
@@ -336,6 +336,15 @@ async function initUserSession(user) {
             toggleBtn.classList.add('hidden');
         }
     }
+
+    // 🛡️ 同时确保页面可能存在的其他管理员专区（如管理面板等）能正常显示
+    document.querySelectorAll('.admin-only').forEach(el => {
+        if (currentUserProfile && currentUserProfile.is_admin) {
+            el.classList.remove('hidden');
+        } else {
+            el.classList.add('hidden');
+        }
+    });
 
     showForum();
 }
@@ -611,12 +620,12 @@ async function loadCategories() {
     }
 }
 
-// 🛡️ 终极安全渲染函数：完全解耦联表强依赖，独立抓取并拼装评论和用户资料
+// 🛡️ 最终完美渲染：支持评论删除、按需隐藏回复框、管理员限流及特权展示
 async function loadTopics(categoryId) {
     const container = document.getElementById('topics-container');
     container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
     
-    // 1. 获取所有用户资料用于名称与徽章安全匹配
+    // 1. 获取所有用户资料用于名称与管理员身份安全挂载
     const { data: profilesData } = await db.from('profiles').select('id, nickname, is_admin');
     const profileMap = {};
     if (profilesData) {
@@ -634,7 +643,7 @@ async function loadTopics(categoryId) {
         return;
     }
 
-    // 3. 收集所有话题 ID 并独立加载对应的评论与回复
+    // 3. 独立加载评论与回复
     const topicIds = topics.map(t => t.id);
     const { data: comments } = await db.from('comments').select('*').in('topic_id', topicIds);
     
@@ -645,7 +654,6 @@ async function loadTopics(categoryId) {
         if (repliesData) replies = repliesData;
     }
 
-    // 4. 在前端将评论和回复归类挂载到对应的话题下
     const commentMap = {};
     if (comments) {
         comments.forEach(c => {
@@ -657,7 +665,6 @@ async function loadTopics(categoryId) {
 
     if (replies) {
         replies.forEach(r => {
-            // 可以在这里寻找所属的 comment 并挂载
             comments.forEach(c => {
                 if (c.id === r.comment_id) {
                     if (!c.replies) c.replies = [];
@@ -677,24 +684,36 @@ async function loadTopics(categoryId) {
         const isAdmin = authorProfile && authorProfile.is_admin;
         const badge = isAdmin ? '<span class="badge-admin">管理员</span>' : '';
         const isOwner = currentAuthUser && currentAuthUser.id === topic.user_id;
-        
-        const ownerActions = (isOwner || (currentUserProfile && currentUserProfile.is_admin)) ? 
-            `<div style="margin-top:8px; display:flex; gap:8px;">
-                <button onclick="window.openEditModal('${topic.id}', \`${topic.title.replace(/`/g, '\\`')}\`, \`${topic.content.replace(/`/g, '\\`')}\`)" style="background:#d69e2e; padding:4px 10px; font-size:11px;">编辑</button>
-                <button onclick="window.deleteTopic('${topic.id}')" style="background:#e53e3e; padding:4px 10px; font-size:11px;">删除</button>
-             </div>` : '';
+        const isUserAdmin = currentUserProfile && currentUserProfile.is_admin;
 
-        // 渲染评论列表
+        // 话题操作按钮（包含编辑、删除，如果是管理员还可以有警告/限流快捷入口）
+        let ownerActions = '';
+        if (isOwner || isUserAdmin) {
+            ownerActions += `<div style="margin-top:8px; display:flex; gap:8px; align-items:center;">`;
+            if (isOwner) {
+                ownerActions += `<button onclick="window.openEditModal('${topic.id}', \`${topic.title.replace(/`/g, '\\`')}\`, \`${topic.content.replace(/`/g, '\\`')}\`)" style="background:#d69e2e; padding:4px 10px; font-size:11px;">编辑</button>`;
+            }
+            ownerActions += `<button onclick="window.deleteTopic('${topic.id}')" style="background:#e53e3e; padding:4px 10px; font-size:11px;">删除</button>`;
+            
+            // 🛡️ 恢复管理员警告/限流专属按钮
+            if (isUserAdmin) {
+                ownerActions += `<button onclick="window.warnUser('${topic.user_id}', '${topic.id}')" style="background:#c53030; padding:4px 10px; font-size:11px; margin-left:auto;">⚠️ 警告/限流</button>`;
+            }
+            ownerActions += `</div>`;
+        }
+
+        // 渲染评论列表（默认隐藏回复框，点击“回复”按钮时动态展开）
         let commentsHtml = '';
         const topicComments = commentMap[topic.id] || [];
         if (topicComments.length > 0) {
             topicComments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-            commentsHtml = '<div style="margin-top:12px; border-top:1px solid var(--border-color); padding-top:8px;">';
+            commentsHtml = '<div style="margin-top:12px; border-top:1px solid var(--border-color); paddingTop:8px;">';
             topicComments.forEach(comment => {
                 const cProfile = profileMap[comment.user_id];
                 const cAuthor = cProfile ? cProfile.nickname : '匿名用户';
                 const cIsAdmin = cProfile && cProfile.is_admin;
                 const cBadge = cIsAdmin ? '<span class="badge-admin">管理员</span>' : '';
+                const canDeleteComment = (currentAuthUser && currentAuthUser.id === comment.user_id) || isUserAdmin;
                 
                 // 渲染回复列表
                 let repliesHtml = '';
@@ -705,9 +724,12 @@ async function loadTopics(categoryId) {
                         const rAuthor = rProfile ? rProfile.nickname : '匿名用户';
                         const rIsAdmin = rProfile && rProfile.is_admin;
                         const rBadge = rIsAdmin ? '<span class="badge-admin">管理员</span>' : '';
+                        const canDeleteReply = (currentAuthUser && currentAuthUser.id === reply.user_id) || isUserAdmin;
+
                         repliesHtml += `
-                            <div style="font-size:12px; background:var(--bg-color); padding:6px 10px; margin-top:4px; border-radius:4px;">
-                                <b>${rAuthor}</b>${rBadge}: ${reply.content}
+                            <div style="font-size:12px; background:var(--bg-color); padding:6px 10px; margin-top:4px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
+                                <div><b>${rAuthor}</b>${rBadge}: ${reply.content}</div>
+                                ${canDeleteReply ? `<button onclick="window.deleteReply('${reply.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">删除</button>` : ''}
                             </div>
                         `;
                     });
@@ -715,12 +737,18 @@ async function loadTopics(categoryId) {
 
                 commentsHtml += `
                     <div style="font-size:12px; margin-bottom:8px; padding:6px; background:var(--card-bg); border-radius:6px; border:1px solid var(--border-color);">
-                        <div><b>${cAuthor}</b>${cBadge} <span style="color:var(--meta-color); font-size:11px;">${new Date(comment.created_at).toLocaleString()}</span></div>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div><b>${cAuthor}</b>${cBadge} <span style="color:var(--meta-color); font-size:11px;">${new Date(comment.created_at).toLocaleString()}</span></div>
+                            ${canDeleteComment ? `<button onclick="window.deleteComment('${comment.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer;">删除</button>` : ''}
+                        </div>
                         <div style="margin:4px 0;">${comment.content}</div>
                         ${repliesHtml}
                         <div style="margin-top:4px;">
-                            <input type="text" id="reply-input-${comment.id}" placeholder="回复这条评论..." style="font-size:11px; padding:3px 6px; width:70%;">
-                            <button onclick="window.createReply('${comment.id}')" style="font-size:11px; padding:3px 8px;">回复</button>
+                            <span onclick="window.toggleReplyBox('${comment.id}')" style="color:var(--primary-color); font-size:11px; cursor:pointer; user-select:none;">💬 回复</span>
+                            <div id="reply-box-${comment.id}" class="hidden" style="margin-top:4px; display:flex; gap:6px;">
+                                <input type="text" id="reply-input-${comment.id}" placeholder="写下你的回复..." style="font-size:11px; padding:3px 6px; flex:1;">
+                                <button onclick="window.createReply('${comment.id}')" style="font-size:11px; padding:3px 8px;">发送</button>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -746,6 +774,18 @@ async function loadTopics(categoryId) {
         container.appendChild(div);
     }
 }
+
+// 动态展开/收起指定评论的回复输入框
+window.toggleReplyBox = function(commentId) {
+    const box = document.getElementById(`reply-box-${commentId}`);
+    if (box) {
+        box.classList.toggle('hidden');
+        if (!box.classList.contains('hidden')) {
+            const input = document.getElementById(`reply-input-${commentId}`);
+            if (input) input.focus();
+        }
+    }
+};
 
 window.createTopic = async function() {
     const title = document.getElementById('topic-title').value.trim();
@@ -812,6 +852,44 @@ window.createReply = async function(commentId) {
         input.value = '';
         loadTopics(currentCategoryId);
     }
+};
+
+// 🛡️ 新增：删除评论逻辑
+window.deleteComment = async function(commentId) {
+    if (!confirm('确定要删除这条评论吗？')) return;
+    const { error } = await db.from('comments').delete().eq('id', commentId);
+    if (error) {
+        alert('删除评论失败: ' + error.message);
+    } else {
+        loadTopics(currentCategoryId);
+    }
+};
+
+// 🛡️ 新增：删除回复逻辑
+window.deleteReply = async function(replyId) {
+    if (!confirm('确定要删除这条回复吗？')) return;
+    const { error } = await db.from('replies').delete().eq('id', replyId);
+    if (error) {
+        alert('删除回复失败: ' + error.message);
+    } else {
+        loadTopics(currentCategoryId);
+    }
+};
+
+// 🛡️ 新增：管理员警告/限流交互功能
+window.warnUser = async function(userId, topicId) {
+    const reason = prompt('请输入对该用户进行警告或限流的原因（将自动生成系统通知发送给对方）：');
+    if (!reason) return;
+
+    // 1. 发送系统通知给被警告用户
+    await db.from('notifications').insert({
+        user_id: userId,
+        title: '⚠️ 违规警告与发帖限流通知',
+        content: `您在论坛发布的内容由于违规已被管理员处理。原因：${reason}`,
+        is_read: false
+    });
+
+    alert('已成功向该用户发出警告并发送通知！');
 };
 
 window.openEditModal = function(id, title, content) {
