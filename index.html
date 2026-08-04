@@ -618,7 +618,7 @@ async function loadCategories() {
     }
 }
 
-// 🛡️ 最终完美渲染：支持 @ 回复逻辑，剔除冗余管理员徽章，流式极简排列
+// 🛡️ 最终完美渲染：评论区用户名支持点击查看资料，对标发帖者
 async function loadTopics(categoryId) {
     const container = document.getElementById('topics-container');
     container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
@@ -683,14 +683,13 @@ async function loadTopics(categoryId) {
             commentsHtml = '<div style="margin-top:10px; border-top:1px dashed var(--border-color); padding-top:6px;">';
             topicComments.forEach(comment => {
                 const cProfile = profileMap[comment.user_id];
-                const cAuthor = cProfile ? cProfile.nickname : '匿名用户';
-                // 🛡️ 移除了评论发布者的管理员身份标签，使评论区更加纯净、平等
+                const cAuthor = cProfile ? cProfile.nickname : (comment.user_name || '匿名用户');
                 const canDeleteComment = (currentAuthUser && currentAuthUser.id === comment.user_id) || isUserAdmin;
 
                 commentsHtml += `
                     <div style="font-size:12px; margin-bottom:6px; padding:4px 0; border-bottom:1px solid rgba(0,0,0,0.03); display:flex; justify-content:space-between; align-items:flex-start;">
                         <div style="line-height:1.4; flex:1; word-break:break-all;">
-                            <b>${cAuthor}</b>: <span style="color:var(--text-color);">${comment.content}</span>
+                            <b class="clickable-name" onclick="window.viewUserProfile('${comment.user_id}')">${cAuthor}</b>: <span style="color:var(--text-color);">${comment.content}</span>
                             <span style="color:var(--meta-color); font-size:10px; margin-left:6px;">${new Date(comment.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                             <span onclick="window.replyToUser('${topic.id}', '${cAuthor}')" style="color:var(--primary-color); font-size:11px; cursor:pointer; margin-left:8px; user-select:none;">回复</span>
                         </div>
@@ -720,7 +719,6 @@ async function loadTopics(categoryId) {
     }
 }
 
-// 🛡️ 点击“回复”时自动在评论输入框中填入 @用户名 格式
 window.replyToUser = function(topicId, authorName) {
     const input = document.getElementById(`comment-input-${topicId}`);
     if (input) {
