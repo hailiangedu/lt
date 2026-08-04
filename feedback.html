@@ -9,7 +9,7 @@
     <style>
         :root {
             --bg-color: #f4f6f8;
-            --card-bg: #ffffff;
+            --card-bg: rgba(255, 255, 255, 0.85); /* 半透明卡片背景 */
             --text-color: #2d3748;
             --meta-color: #718096;
             --border-color: #e2e8f0;
@@ -18,7 +18,7 @@
 
         [data-theme="dark"] {
             --bg-color: #1a202c;
-            --card-bg: #2d3748;
+            --card-bg: rgba(45, 55, 72, 0.85); /* 暗黑模式半透明卡片背景 */
             --text-color: #f7fafc;
             --meta-color: #a0aec0;
             --border-color: #4a5568;
@@ -44,12 +44,15 @@
 
         .card {
             background-color: var(--card-bg);
+            /* 增加磨砂玻璃模糊滤镜，透出隐隐约约的背景 */
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             border: 1px solid var(--border-color);
             border-radius: 8px;
             padding: 24px;
             width: 100%;
             max-width: 500px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
 
         h2 {
@@ -64,12 +67,17 @@
             padding: 10px;
             border: 1px solid var(--border-color);
             border-radius: 4px;
-            background-color: var(--card-bg);
+            /* 文本框也采用轻微半透明，与整体质感保持一致 */
+            background-color: rgba(255, 255, 255, 0.5);
             color: var(--text-color);
             resize: vertical;
             box-sizing: border-box;
             font-size: 14px;
             margin-bottom: 16px;
+        }
+
+        [data-theme="dark"] textarea {
+            background-color: rgba(26, 32, 44, 0.5);
         }
 
         .btn-group {
@@ -128,14 +136,19 @@
                 document.documentElement.setAttribute('data-theme', 'dark');
             }
 
-            // 读取主页使用的自定义背景配置（适配常见的键名：custom_bg / customBg / bg_image 等）
-            const customBg = localStorage.getItem('custom_bg') || localStorage.getItem('customBg') || localStorage.getItem('bg_image');
-            
-            if (customBg) {
-                // 如果用户设置了自定义背景，则优先使用用户自定义的
-                document.body.style.backgroundImage = `url('${customBg}')`;
+            // 覆盖各种可能存储自定义背景的 localStorage 键名
+            const bgType = localStorage.getItem('forum_bg_type');
+            const bgValue = localStorage.getItem('forum_bg_value') || localStorage.getItem('custom_bg') || localStorage.getItem('customBg') || localStorage.getItem('bg_image');
+
+            if (bgType === 'color' && bgValue) {
+                // 如果用户存的是纯色背景
+                document.body.style.backgroundColor = bgValue;
+                document.body.style.backgroundImage = 'none';
+            } else if (bgValue) {
+                // 如果用户设置了自定义背景图片、Base64 或 Blob 链接
+                document.body.style.backgroundImage = `url('${bgValue}')`;
             } else {
-                // 否则默认使用 beijing.png
+                // 默认背景
                 document.body.style.backgroundImage = "url('beijing.png')";
             }
         }
@@ -149,9 +162,15 @@
                 } else {
                     document.documentElement.removeAttribute('data-theme');
                 }
-            } else if (['custom_bg', 'customBg', 'bg_image'].includes(event.key)) {
-                if (event.newValue) {
-                    document.body.style.backgroundImage = `url('${event.newValue}')`;
+            } else if (['forum_bg_type', 'forum_bg_value', 'custom_bg', 'customBg', 'bg_image'].includes(event.key)) {
+                const bgType = localStorage.getItem('forum_bg_type');
+                const bgValue = localStorage.getItem('forum_bg_value') || localStorage.getItem('custom_bg') || localStorage.getItem('customBg') || localStorage.getItem('bg_image');
+                
+                if (bgType === 'color' && bgValue) {
+                    document.body.style.backgroundColor = bgValue;
+                    document.body.style.backgroundImage = 'none';
+                } else if (bgValue) {
+                    document.body.style.backgroundImage = `url('${bgValue}')`;
                 } else {
                     document.body.style.backgroundImage = "url('beijing.png')";
                 }
