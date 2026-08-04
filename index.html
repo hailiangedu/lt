@@ -95,7 +95,7 @@ button:hover { opacity: 0.9; }
         <input type="password" id="password" placeholder="请输入密码 (至少6位)"> 
         <div style="display: flex; gap: 10px;"> 
             <button onclick="window.handleLogin()" style="flex:1;">登录</button> 
-            <button onclick="window.handleRegister()" style="flex:1; background-color:#3182ce;">注册</button> 
+            <button onclick="window.handleRegister()" style="flex:1; background-color:#66ccff;">注册</button> 
         </div> 
         <p id="auth-msg" style="color: red; font-size: 13px; margin-top: 10px;"></p> 
     </div> 
@@ -109,7 +109,7 @@ button:hover { opacity: 0.9; }
                     <span id="user-profile-summary" style="font-size: 12px; color: var(--meta-color);">加载中...</span>                 
                 </div>
                 <!-- 管理员专属切换按钮（默认隐藏，登录后由脚本控制显示） -->
-                <button id="post-mode-toggle" class="hidden" onclick="window.togglePostMode()" data-mode="topic" style="background: #718096; color: #fff; padding: 4px 10px; font-size: 11px; border: none; border-radius: 4px; cursor: pointer;">切换全局通知</button>
+                <button id="post-mode-toggle" class="hidden" onclick="window.togglePostMode()" data-mode="topic" style="background: #718096; color: #fff; padding: 3px 6px; font-size: 6px; border: none; border-radius: 3px; cursor: pointer;">切换全局通知</button>
             </div>             
             <div style="display: flex; gap: 8px;">
                 <button onclick="window.location.href='space.html'" style="background:#4a5568;">互动空间</button>
@@ -131,7 +131,7 @@ button:hover { opacity: 0.9; }
             <!-- 右侧话题列表 --> 
             <div style="width: 75%;"> 
                 <div class="card"> 
-                    <h3>发表新话题</h3> 
+                    <h3>发表新内容</h3> 
                     <input type="text" id="topic-title" placeholder="话题标题..."> 
                     <textarea id="topic-content" rows="3" placeholder="分享你的新鲜事、求助或闲置信息..."></textarea> 
                     <button id="post-submit-btn" onclick="window.handlePostSubmit()">发布话题</button> 
