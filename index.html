@@ -262,7 +262,7 @@ window.togglePostMode = function() {
     }
 };
 
-// 恢复群发通知与话题发布分发
+// 群发通知与话题发布分发
 window.handlePostSubmit = async function() {
     const isTopicMode = document.getElementById('post-mode-toggle').dataset.mode === 'topic';
     if (isTopicMode) {
@@ -611,29 +611,73 @@ async function loadCategories() {
     }
 }
 
-// 恢复带完整 UI、评论及回复功能的 loadTopics 渲染逻辑
+// 🛡️ 终极安全渲染函数：完全解耦联表强依赖，独立抓取并拼装评论和用户资料
 async function loadTopics(categoryId) {
     const container = document.getElementById('topics-container');
     container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
     
-    const { data, error } = await db.from('topics')
-        .select(`*, profiles(nickname, is_admin), comments(*, profiles(nickname, is_admin), replies(*, profiles(nickname, is_admin)))`)
+    // 1. 获取所有用户资料用于名称与徽章安全匹配
+    const { data: profilesData } = await db.from('profiles').select('id, nickname, is_admin');
+    const profileMap = {};
+    if (profilesData) {
+        profilesData.forEach(p => { profileMap[p.id] = p; });
+    }
+
+    // 2. 加载当前板块下的所有话题
+    const { data: topics, error } = await db.from('topics')
+        .select('*')
         .eq('category_id', categoryId)
         .order('created_at', { ascending: false });
 
-    if (error || !data || data.length === 0) {
+    if (error || !topics || topics.length === 0) {
         container.innerHTML = '<div class="card"><p style="font-size:13px; color:var(--meta-color); margin:0;">该板块下暂无话题，快来发表第一个话题吧！</p></div>';
         return;
     }
+
+    // 3. 收集所有话题 ID 并独立加载对应的评论与回复
+    const topicIds = topics.map(t => t.id);
+    const { data: comments } = await db.from('comments').select('*').in('topic_id', topicIds);
     
+    let replies = [];
+    if (comments && comments.length > 0) {
+        const commentIds = comments.map(c => c.id);
+        const { data: repliesData } = await db.from('replies').select('*').in('comment_id', commentIds);
+        if (repliesData) replies = repliesData;
+    }
+
+    // 4. 在前端将评论和回复归类挂载到对应的话题下
+    const commentMap = {};
+    if (comments) {
+        comments.forEach(c => {
+            c.replies = [];
+            if (!commentMap[c.topic_id]) commentMap[c.topic_id] = [];
+            commentMap[c.topic_id].push(c);
+        });
+    }
+
+    if (replies) {
+        replies.forEach(r => {
+            // 可以在这里寻找所属的 comment 并挂载
+            comments.forEach(c => {
+                if (c.id === r.comment_id) {
+                    if (!c.replies) c.replies = [];
+                    c.replies.push(r);
+                }
+            });
+        });
+    }
+
     container.innerHTML = '';
-    for (const topic of data) {
+    for (const topic of topics) {
         const div = document.createElement('div');
         div.className = 'card';
-        const authorName = topic.profiles ? topic.profiles.nickname : (topic.user_name || '匿名用户');
-        const isAdmin = topic.profiles && topic.profiles.is_admin;
+        
+        const authorProfile = profileMap[topic.user_id];
+        const authorName = authorProfile ? authorProfile.nickname : (topic.user_name || '匿名用户');
+        const isAdmin = authorProfile && authorProfile.is_admin;
         const badge = isAdmin ? '<span class="badge-admin">管理员</span>' : '';
         const isOwner = currentAuthUser && currentAuthUser.id === topic.user_id;
+        
         const ownerActions = (isOwner || (currentUserProfile && currentUserProfile.is_admin)) ? 
             `<div style="margin-top:8px; display:flex; gap:8px;">
                 <button onclick="window.openEditModal('${topic.id}', \`${topic.title.replace(/`/g, '\\`')}\`, \`${topic.content.replace(/`/g, '\\`')}\`)" style="background:#d69e2e; padding:4px 10px; font-size:11px;">编辑</button>
@@ -642,13 +686,14 @@ async function loadTopics(categoryId) {
 
         // 渲染评论列表
         let commentsHtml = '';
-        if (topic.comments && topic.comments.length > 0) {
-            // 按时间正序排列评论
-            topic.comments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        const topicComments = commentMap[topic.id] || [];
+        if (topicComments.length > 0) {
+            topicComments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
             commentsHtml = '<div style="margin-top:12px; border-top:1px solid var(--border-color); padding-top:8px;">';
-            topic.comments.forEach(comment => {
-                const cAuthor = comment.profiles ? comment.profiles.nickname : '匿名用户';
-                const cIsAdmin = comment.profiles && comment.profiles.is_admin;
+            topicComments.forEach(comment => {
+                const cProfile = profileMap[comment.user_id];
+                const cAuthor = cProfile ? cProfile.nickname : '匿名用户';
+                const cIsAdmin = cProfile && cProfile.is_admin;
                 const cBadge = cIsAdmin ? '<span class="badge-admin">管理员</span>' : '';
                 
                 // 渲染回复列表
@@ -656,8 +701,9 @@ async function loadTopics(categoryId) {
                 if (comment.replies && comment.replies.length > 0) {
                     comment.replies.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
                     comment.replies.forEach(reply => {
-                        const rAuthor = reply.profiles ? reply.profiles.nickname : '匿名用户';
-                        const rIsAdmin = reply.profiles && reply.profiles.is_admin;
+                        const rProfile = profileMap[reply.user_id];
+                        const rAuthor = rProfile ? rProfile.nickname : '匿名用户';
+                        const rIsAdmin = rProfile && rProfile.is_admin;
                         const rBadge = rIsAdmin ? '<span class="badge-admin">管理员</span>' : '';
                         repliesHtml += `
                             <div style="font-size:12px; background:var(--bg-color); padding:6px 10px; margin-top:4px; border-radius:4px;">
