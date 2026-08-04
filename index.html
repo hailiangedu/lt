@@ -327,7 +327,6 @@ async function initUserSession(user) {
     document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${currentUserProfile.nickname}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
     checkUnreadNotifications(user.id);
     
-    // 🛡️ 恢复管理员专属发布模式按钮展示控制
     const toggleBtn = document.getElementById('post-mode-toggle');
     if (toggleBtn) {
         if (currentUserProfile && currentUserProfile.is_admin) {
@@ -337,7 +336,6 @@ async function initUserSession(user) {
         }
     }
 
-    // 🛡️ 同时确保页面可能存在的其他管理员专区（如管理面板等）能正常显示
     document.querySelectorAll('.admin-only').forEach(el => {
         if (currentUserProfile && currentUserProfile.is_admin) {
             el.classList.remove('hidden');
@@ -620,7 +618,7 @@ async function loadCategories() {
     }
 }
 
-// 🛡️ 最终完美渲染：支持评论删除、按需隐藏回复框、管理员限流及特权展示
+// 🛡️ 最终完美渲染：单表独立查询、评论区取消独立卡片改为极致轻量流式排版
 async function loadTopics(categoryId) {
     const container = document.getElementById('topics-container');
     container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
@@ -643,34 +641,15 @@ async function loadTopics(categoryId) {
         return;
     }
 
-    // 3. 独立加载评论与回复
+    // 3. 独立加载评论（避免触发缺失 replies 表的错误）
     const topicIds = topics.map(t => t.id);
     const { data: comments } = await db.from('comments').select('*').in('topic_id', topicIds);
-    
-    let replies = [];
-    if (comments && comments.length > 0) {
-        const commentIds = comments.map(c => c.id);
-        const { data: repliesData } = await db.from('replies').select('*').in('comment_id', commentIds);
-        if (repliesData) replies = repliesData;
-    }
 
     const commentMap = {};
     if (comments) {
         comments.forEach(c => {
-            c.replies = [];
             if (!commentMap[c.topic_id]) commentMap[c.topic_id] = [];
             commentMap[c.topic_id].push(c);
-        });
-    }
-
-    if (replies) {
-        replies.forEach(r => {
-            comments.forEach(c => {
-                if (c.id === r.comment_id) {
-                    if (!c.replies) c.replies = [];
-                    c.replies.push(r);
-                }
-            });
         });
     }
 
@@ -686,7 +665,7 @@ async function loadTopics(categoryId) {
         const isOwner = currentAuthUser && currentAuthUser.id === topic.user_id;
         const isUserAdmin = currentUserProfile && currentUserProfile.is_admin;
 
-        // 话题操作按钮（包含编辑、删除，如果是管理员还可以有警告/限流快捷入口）
+        // 话题操作按钮
         let ownerActions = '';
         if (isOwner || isUserAdmin) {
             ownerActions += `<div style="margin-top:8px; display:flex; gap:8px; align-items:center;">`;
@@ -695,61 +674,32 @@ async function loadTopics(categoryId) {
             }
             ownerActions += `<button onclick="window.deleteTopic('${topic.id}')" style="background:#e53e3e; padding:4px 10px; font-size:11px;">删除</button>`;
             
-            // 🛡️ 恢复管理员警告/限流专属按钮
             if (isUserAdmin) {
                 ownerActions += `<button onclick="window.warnUser('${topic.user_id}', '${topic.id}')" style="background:#c53030; padding:4px 10px; font-size:11px; margin-left:auto;">⚠️ 警告/限流</button>`;
             }
             ownerActions += `</div>`;
         }
 
-        // 渲染评论列表（默认隐藏回复框，点击“回复”按钮时动态展开）
+        // 渲染评论列表（无冗余卡片，采用极简流式行排列，节省空间）
         let commentsHtml = '';
         const topicComments = commentMap[topic.id] || [];
         if (topicComments.length > 0) {
             topicComments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-            commentsHtml = '<div style="margin-top:12px; border-top:1px solid var(--border-color); paddingTop:8px;">';
+            commentsHtml = '<div style="margin-top:10px; border-top:1px dashed var(--border-color); padding-top:6px;">';
             topicComments.forEach(comment => {
                 const cProfile = profileMap[comment.user_id];
                 const cAuthor = cProfile ? cProfile.nickname : '匿名用户';
                 const cIsAdmin = cProfile && cProfile.is_admin;
                 const cBadge = cIsAdmin ? '<span class="badge-admin">管理员</span>' : '';
                 const canDeleteComment = (currentAuthUser && currentAuthUser.id === comment.user_id) || isUserAdmin;
-                
-                // 渲染回复列表
-                let repliesHtml = '';
-                if (comment.replies && comment.replies.length > 0) {
-                    comment.replies.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-                    comment.replies.forEach(reply => {
-                        const rProfile = profileMap[reply.user_id];
-                        const rAuthor = rProfile ? rProfile.nickname : '匿名用户';
-                        const rIsAdmin = rProfile && rProfile.is_admin;
-                        const rBadge = rIsAdmin ? '<span class="badge-admin">管理员</span>' : '';
-                        const canDeleteReply = (currentAuthUser && currentAuthUser.id === reply.user_id) || isUserAdmin;
-
-                        repliesHtml += `
-                            <div style="font-size:12px; background:var(--bg-color); padding:6px 10px; margin-top:4px; border-radius:4px; display:flex; justify-content:space-between; align-items:center;">
-                                <div><b>${rAuthor}</b>${rBadge}: ${reply.content}</div>
-                                ${canDeleteReply ? `<button onclick="window.deleteReply('${reply.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">删除</button>` : ''}
-                            </div>
-                        `;
-                    });
-                }
 
                 commentsHtml += `
-                    <div style="font-size:12px; margin-bottom:8px; padding:6px; background:var(--card-bg); border-radius:6px; border:1px solid var(--border-color);">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div><b>${cAuthor}</b>${cBadge} <span style="color:var(--meta-color); font-size:11px;">${new Date(comment.created_at).toLocaleString()}</span></div>
-                            ${canDeleteComment ? `<button onclick="window.deleteComment('${comment.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer;">删除</button>` : ''}
+                    <div style="font-size:12px; margin-bottom:5px; padding:3px 0; border-bottom:1px solid rgba(0,0,0,0.03); display:flex; justify-content:space-between; align-items:flex-start;">
+                        <div style="line-height:1.4; flex:1; word-break:break-all;">
+                            <b>${cAuthor}</b>${cBadge}: <span style="color:var(--text-color);">${comment.content}</span>
+                            <span style="color:var(--meta-color); font-size:10px; margin-left:6px;">${new Date(comment.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                         </div>
-                        <div style="margin:4px 0;">${comment.content}</div>
-                        ${repliesHtml}
-                        <div style="margin-top:4px;">
-                            <span onclick="window.toggleReplyBox('${comment.id}')" style="color:var(--primary-color); font-size:11px; cursor:pointer; user-select:none;">💬 回复</span>
-                            <div id="reply-box-${comment.id}" class="hidden" style="margin-top:4px; display:flex; gap:6px;">
-                                <input type="text" id="reply-input-${comment.id}" placeholder="写下你的回复..." style="font-size:11px; padding:3px 6px; flex:1;">
-                                <button onclick="window.createReply('${comment.id}')" style="font-size:11px; padding:3px 8px;">发送</button>
-                            </div>
-                        </div>
+                        ${canDeleteComment ? `<button onclick="window.deleteComment('${comment.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px; flex-shrink:0;">删除</button>` : ''}
                     </div>
                 `;
             });
@@ -766,26 +716,14 @@ async function loadTopics(categoryId) {
             <p style="margin:0 0 8px 0; white-space: pre-wrap; font-size:13px;">${topic.content}</p>
             ${ownerActions}
             ${commentsHtml}
-            <div style="margin-top:10px; display:flex; gap:6px;">
-                <input type="text" id="comment-input-${topic.id}" placeholder="发表一条友善的评论..." style="font-size:12px; padding:4px 8px; flex:1;">
-                <button onclick="window.createComment('${topic.id}')" style="font-size:12px; padding:4px 12px;">评论</button>
+            <div style="margin-top:8px; display:flex; gap:6px;">
+                <input type="text" id="comment-input-${topic.id}" placeholder="写下你的评论..." style="font-size:12px; padding:3px 8px; flex:1;">
+                <button onclick="window.createComment('${topic.id}')" style="font-size:12px; padding:3px 12px;">评论</button>
             </div>
         `;
         container.appendChild(div);
     }
 }
-
-// 动态展开/收起指定评论的回复输入框
-window.toggleReplyBox = function(commentId) {
-    const box = document.getElementById(`reply-box-${commentId}`);
-    if (box) {
-        box.classList.toggle('hidden');
-        if (!box.classList.contains('hidden')) {
-            const input = document.getElementById(`reply-input-${commentId}`);
-            if (input) input.focus();
-        }
-    }
-};
 
 window.createTopic = async function() {
     const title = document.getElementById('topic-title').value.trim();
@@ -821,9 +759,11 @@ window.createComment = async function(topicId) {
     const content = input.value.trim();
     if (!content) return alert('评论内容不能为空！');
     
+    // 🛡️ 显式带入 user_name 避免触发数据库非空约束报错
     const { error } = await db.from('comments').insert({
         topic_id: topicId,
         user_id: currentAuthUser.id,
+        user_name: currentUserProfile.nickname || '匿名用户',
         content
     });
     
@@ -835,26 +775,6 @@ window.createComment = async function(topicId) {
     }
 };
 
-window.createReply = async function(commentId) {
-    const input = document.getElementById(`reply-input-${commentId}`);
-    const content = input.value.trim();
-    if (!content) return alert('回复内容不能为空！');
-    
-    const { error } = await db.from('replies').insert({
-        comment_id: commentId,
-        user_id: currentAuthUser.id,
-        content
-    });
-    
-    if (error) {
-        alert('回复失败: ' + error.message);
-    } else {
-        input.value = '';
-        loadTopics(currentCategoryId);
-    }
-};
-
-// 🛡️ 新增：删除评论逻辑
 window.deleteComment = async function(commentId) {
     if (!confirm('确定要删除这条评论吗？')) return;
     const { error } = await db.from('comments').delete().eq('id', commentId);
@@ -865,23 +785,10 @@ window.deleteComment = async function(commentId) {
     }
 };
 
-// 🛡️ 新增：删除回复逻辑
-window.deleteReply = async function(replyId) {
-    if (!confirm('确定要删除这条回复吗？')) return;
-    const { error } = await db.from('replies').delete().eq('id', replyId);
-    if (error) {
-        alert('删除回复失败: ' + error.message);
-    } else {
-        loadTopics(currentCategoryId);
-    }
-};
-
-// 🛡️ 新增：管理员警告/限流交互功能
 window.warnUser = async function(userId, topicId) {
     const reason = prompt('请输入对该用户进行警告或限流的原因（将自动生成系统通知发送给对方）：');
     if (!reason) return;
 
-    // 1. 发送系统通知给被警告用户
     await db.from('notifications').insert({
         user_id: userId,
         title: '⚠️ 违规警告与发帖限流通知',
