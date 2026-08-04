@@ -9,25 +9,26 @@
     <style>
         :root {
             --bg-color: #f4f6f8;
-            --card-bg: rgba(255, 255, 255, 0.85); /* 半透明卡片背景 */
+            --card-bg: rgba(255, 255, 255, 0.45); /* 降低卡片不透明度，使背景隐隐约约可见 */
             --text-color: #2d3748;
             --meta-color: #718096;
-            --border-color: #e2e8f0;
+            --border-color: rgba(226, 232, 240, 0.6);
             --primary-color: #3182ce;
         }
 
         [data-theme="dark"] {
             --bg-color: #1a202c;
-            --card-bg: rgba(45, 55, 72, 0.85); /* 暗黑模式半透明卡片背景 */
+            --card-bg: rgba(45, 55, 72, 0.45); /* 暗黑模式下的半透明卡片 */
             --text-color: #f7fafc;
             --meta-color: #a0aec0;
-            --border-color: #4a5568;
+            --border-color: rgba(74, 85, 104, 0.6);
             --primary-color: #63b3ed;
         }
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg-color);
+            /* 默认背景图片，若无自定义背景则展示 */
             background-image: url('beijing.png');
             background-size: cover;
             background-position: center;
@@ -44,15 +45,15 @@
 
         .card {
             background-color: var(--card-bg);
-            /* 增加磨砂玻璃模糊滤镜，透出隐隐约约的背景 */
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
+            /* 添加强磨砂玻璃毛玻璃特效，让背景完美隐现 */
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
+            border-radius: 12px;
             padding: 24px;
             width: 100%;
             max-width: 500px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
         }
 
         h2 {
@@ -66,9 +67,9 @@
             height: 150px;
             padding: 10px;
             border: 1px solid var(--border-color);
-            border-radius: 4px;
-            /* 文本框也采用轻微半透明，与整体质感保持一致 */
-            background-color: rgba(255, 255, 255, 0.5);
+            border-radius: 6px;
+            /* 文本框同样半透明化 */
+            background-color: rgba(255, 255, 255, 0.3);
             color: var(--text-color);
             resize: vertical;
             box-sizing: border-box;
@@ -77,7 +78,7 @@
         }
 
         [data-theme="dark"] textarea {
-            background-color: rgba(26, 32, 44, 0.5);
+            background-color: rgba(26, 32, 44, 0.3);
         }
 
         .btn-group {
@@ -91,7 +92,7 @@
             color: white;
             border: none;
             padding: 8px 16px;
-            border-radius: 4px;
+            border-radius: 6px;
             cursor: pointer;
             font-size: 14px;
         }
@@ -125,8 +126,9 @@
     </div>
 
     <script>
-        // 初始化主题与背景（与 index.html 完全同步）
+        // 初始化主题与背景（与 index.html 的背景状态读取逻辑全面对齐）
         function initThemeAndBg() {
+            // 1. 处理明暗主题
             const savedTheme = localStorage.getItem('forum_theme');
             if (savedTheme === 'dark') {
                 document.documentElement.setAttribute('data-theme', 'dark');
@@ -136,25 +138,28 @@
                 document.documentElement.setAttribute('data-theme', 'dark');
             }
 
-            // 覆盖各种可能存储自定义背景的 localStorage 键名
+            // 2. 匹配主页可能使用的一切背景存储键名（包括自定义图片、Base64、Blob 链接或纯色）
             const bgType = localStorage.getItem('forum_bg_type');
-            const bgValue = localStorage.getItem('forum_bg_value') || localStorage.getItem('custom_bg') || localStorage.getItem('customBg') || localStorage.getItem('bg_image');
+            const bgValue = localStorage.getItem('forum_bg_value') || 
+                            localStorage.getItem('custom_bg') || 
+                            localStorage.getItem('customBg') || 
+                            localStorage.getItem('bg_image') ||
+                            localStorage.getItem('backgroundImage');
 
             if (bgType === 'color' && bgValue) {
-                // 如果用户存的是纯色背景
                 document.body.style.backgroundColor = bgValue;
                 document.body.style.backgroundImage = 'none';
             } else if (bgValue) {
-                // 如果用户设置了自定义背景图片、Base64 或 Blob 链接
-                document.body.style.backgroundImage = `url('${bgValue}')`;
+                // 确保对带有空格或特殊字符的 Blob / URL 进行安全包裹
+                document.body.style.backgroundImage = `url("${bgValue}")`;
             } else {
-                // 默认背景
+                // 如果没有自定义背景，应用默认背景图片 beijing.png
                 document.body.style.backgroundImage = "url('beijing.png')";
             }
         }
         initThemeAndBg();
 
-        // 监听 localStorage 变化，实现多页面实时同步
+        // 监听 localStorage 跨页面实时同步事件
         window.addEventListener('storage', (event) => {
             if (event.key === 'forum_theme') {
                 if (event.newValue === 'dark') {
@@ -162,15 +167,19 @@
                 } else {
                     document.documentElement.removeAttribute('data-theme');
                 }
-            } else if (['forum_bg_type', 'forum_bg_value', 'custom_bg', 'customBg', 'bg_image'].includes(event.key)) {
+            } else if (['forum_bg_type', 'forum_bg_value', 'custom_bg', 'customBg', 'bg_image', 'backgroundImage'].includes(event.key)) {
                 const bgType = localStorage.getItem('forum_bg_type');
-                const bgValue = localStorage.getItem('forum_bg_value') || localStorage.getItem('custom_bg') || localStorage.getItem('customBg') || localStorage.getItem('bg_image');
-                
+                const bgValue = localStorage.getItem('forum_bg_value') || 
+                                localStorage.getItem('custom_bg') || 
+                                localStorage.getItem('customBg') || 
+                                localStorage.getItem('bg_image') ||
+                                localStorage.getItem('backgroundImage');
+
                 if (bgType === 'color' && bgValue) {
                     document.body.style.backgroundColor = bgValue;
                     document.body.style.backgroundImage = 'none';
                 } else if (bgValue) {
-                    document.body.style.backgroundImage = `url('${bgValue}')`;
+                    document.body.style.backgroundImage = `url("${bgValue}")`;
                 } else {
                     document.body.style.backgroundImage = "url('beijing.png')";
                 }
