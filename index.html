@@ -171,6 +171,18 @@ button:hover { opacity: 0.9; }
             <input type="text" id="profile-role" disabled style="background: var(--bg-color);"> 
         </div> 
         <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;"> 
+        <!-- 新增“年级”必填项（强制公开） -->
+        <div class="profile-row">
+            <label><span style="color:red;">*</span> 年级：</label>
+            <select id="p-grade" style="margin-bottom:0;">
+                <option value="毕业">毕业</option>
+                <option value="高三">高三</option>
+                <option value="高二">高二</option>
+                <option value="高一">高一</option>
+                <option value="英才">英才</option>
+            </select>
+            <span style="font-size:12px; color:var(--meta-color); width:60px;">必填(公开)</span>
+        </div>
         
         <!-- 扩展资料填写 --> 
         <div class="profile-row"><label>昵称：</label><input type="text" id="p-nickname" style="margin-bottom:0;"><span style="font-size:12px; color:var(--meta-color); width:60px;">必填</span></div> 
@@ -376,6 +388,8 @@ window.openProfile = async function() {
     if (!currentAuthUser) return;
     document.getElementById('profile-email').value = currentAuthUser.email;
     document.getElementById('profile-role').value = currentUserProfile.is_admin ? '🛡️ 管理员 (Admin)' : '普通成员';
+    // 假设 profile 为当前用户的资料对象
+    document.getElementById('p-grade').value = profile.grade || '英才';
     document.getElementById('p-nickname').value = currentUserProfile.nickname || '';
     document.getElementById('p-real-name').value = currentUserProfile.real_name || '';
     document.getElementById('p-phone').value = currentUserProfile.phone || '';
@@ -500,9 +514,14 @@ window.updateProfile = async function() {
     const nickname = document.getElementById('p-nickname').value.trim();
     const msgEl = document.getElementById('profile-msg');
     if (!nickname) return alert('昵称不能为空！');
-    
+    const grade = document.getElementById('p-grade').value;
+    if (!grade) {
+        alert('请选择年级！');
+        return;
+    }
     const updateData = {
         nickname,
+        grade,
         real_name: document.getElementById('p-real-name').value.trim(),
         phone: document.getElementById('p-phone').value.trim(),
         gender: document.getElementById('p-gender').value.trim(),
@@ -876,7 +895,8 @@ window.viewUserProfile = async function(userId) {
     
     let html = `<div style="font-size:13px; display:flex; flex-direction:column; gap:6px;">`;
     html += `<div><b>身份：</b>${profile.is_admin ? '🛡️ 管理员 (Admin)' : '普通成员'}</div>`;
-    
+    // 在构建他人资料弹窗的 html 字符串中，直接追加年级显示（强制向外展示）
+    html += `<div><b>年级：</b> ${profile.grade || '未填写'}</div>`;
     if ((isAdminViewer || profile.public_email) && profile.email) {
         const isBypassed = !profile.public_email && isAdminViewer;
         html += `<div><b>绑定邮箱：</b>${profile.email} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
