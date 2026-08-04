@@ -637,7 +637,7 @@ async function loadTopics(categoryId) {
     for (const topic of data) {
         const div = document.createElement('div');
         div.className = 'card';
-        const authorName = topic.profiles ? topic.profiles.nickname : '匿名用户';
+        const authorName = topic.profiles ? topic.profiles.nickname : (topic.user_name || '匿名用户');
         const isAdmin = topic.profiles && topic.profiles.is_admin;
         const badge = isAdmin ? '<span class="badge-admin">管理员</span>' : '';
         const isOwner = currentAuthUser && currentAuthUser.id === topic.user_id;
@@ -672,12 +672,16 @@ window.createTopic = async function() {
         alert('请先选择一个讨论板块！');
         return;
     }
+    
+    // 👉 修复点：显式将当前用户的 nickname 传给数据库的 user_name 字段，避免违反非空约束
     const { error } = await db.from('topics').insert({
         category_id: currentCategoryId,
         user_id: currentAuthUser.id,
+        user_name: currentUserProfile.nickname || '匿名用户',
         title,
         content
     });
+
     if (error) {
         alert('发布失败: ' + error.message);
     } else {
