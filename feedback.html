@@ -28,6 +28,7 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg-color);
+            background-image: url('beijing.png');
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
@@ -116,8 +117,8 @@
     </div>
 
     <script>
-        // 初始化主题与自定义背景（与 index.html 保持一致）
-        function initTheme() {
+        // 初始化主题与背景（与 index.html 完全同步）
+        function initThemeAndBg() {
             const savedTheme = localStorage.getItem('forum_theme');
             if (savedTheme === 'dark') {
                 document.documentElement.setAttribute('data-theme', 'dark');
@@ -127,22 +128,20 @@
                 document.documentElement.setAttribute('data-theme', 'dark');
             }
 
-            // 读取自定义背景配置
-            const bgType = localStorage.getItem('forum_bg_type');
-            const bgValue = localStorage.getItem('forum_bg_value');
+            // 读取主页使用的自定义背景配置（适配常见的键名：custom_bg / customBg / bg_image 等）
+            const customBg = localStorage.getItem('custom_bg') || localStorage.getItem('customBg') || localStorage.getItem('bg_image');
             
-            if (bgType === 'color' && bgValue) {
-                document.body.style.backgroundColor = bgValue;
-                document.body.style.backgroundImage = 'none';
-            } else if (bgType === 'image' && bgValue) {
-                // 兼容 Blob URL、Data URL 或常规 URL，确保用单引号包裹防止特殊字符解析失败
-                document.body.style.backgroundImage = `url('${bgValue}')`;
-                document.body.style.backgroundColor = 'transparent'; // 防止背景色遮挡图片
+            if (customBg) {
+                // 如果用户设置了自定义背景，则优先使用用户自定义的
+                document.body.style.backgroundImage = `url('${customBg}')`;
+            } else {
+                // 否则默认使用 beijing.png
+                document.body.style.backgroundImage = "url('beijing.png')";
             }
         }
-        initTheme();
+        initThemeAndBg();
 
-        // 监听 localStorage 变化，实现多页面主题与背景实时同步
+        // 监听 localStorage 变化，实现多页面实时同步
         window.addEventListener('storage', (event) => {
             if (event.key === 'forum_theme') {
                 if (event.newValue === 'dark') {
@@ -150,18 +149,11 @@
                 } else {
                     document.documentElement.removeAttribute('data-theme');
                 }
-            } else if (event.key === 'forum_bg_type' || event.key === 'forum_bg_value') {
-                const bgType = localStorage.getItem('forum_bg_type');
-                const bgValue = localStorage.getItem('forum_bg_value');
-                if (bgType === 'color' && bgValue) {
-                    document.body.style.backgroundColor = bgValue;
-                    document.body.style.backgroundImage = 'none';
-                } else if (bgType === 'image' && bgValue) {
-                    document.body.style.backgroundImage = `url('${bgValue}')`;
-                    document.body.style.backgroundColor = 'transparent';
+            } else if (['custom_bg', 'customBg', 'bg_image'].includes(event.key)) {
+                if (event.newValue) {
+                    document.body.style.backgroundImage = `url('${event.newValue}')`;
                 } else {
-                    document.body.style.backgroundColor = '';
-                    document.body.style.backgroundImage = '';
+                    document.body.style.backgroundImage = "url('beijing.png')";
                 }
             }
         });
