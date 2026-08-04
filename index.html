@@ -618,7 +618,7 @@ async function loadCategories() {
     }
 }
 
-// 🛡️ 发布者与发布时间调整至帖子正文底部
+// 🛡️ 帖子操作按钮统一右侧对齐，文本精简为“警告”
 async function loadTopics(categoryId) {
     const container = document.getElementById('topics-container');
     container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
@@ -664,14 +664,14 @@ async function loadTopics(categoryId) {
 
         let ownerActions = '';
         if (isOwner || isUserAdmin) {
-            ownerActions += `<div style="margin-top:8px; display:flex; gap:8px; align-items:center;">`;
+            ownerActions += `<div style="margin-top:8px; display:flex; justify-content:flex-end; align-items:center; gap:6px;">`;
             if (isOwner) {
-                ownerActions += `<button onclick="window.openEditModal('${topic.id}', \`${topic.title.replace(/`/g, '\\`')}\`, \`${topic.content.replace(/`/g, '\\`')}\`)" style="background:#d69e2e; padding:4px 10px; font-size:11px;">编辑</button>`;
+                ownerActions += `<button onclick="window.openEditModal('${topic.id}', \`${topic.title.replace(/`/g, '\\`')}\`, \`${topic.content.replace(/`/g, '\\`')}\`)" style="background:transparent; color:#d69e2e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">编辑</button>`;
             }
-            ownerActions += `<button onclick="window.deleteTopic('${topic.id}')" style="background:#e53e3e; padding:4px 10px; font-size:11px;">删除</button>`;
+            ownerActions += `<button onclick="window.deleteTopic('${topic.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">删除</button>`;
             
             if (isUserAdmin) {
-                ownerActions += `<button onclick="window.warnUser('${topic.user_id}', '${topic.id}')" style="background:#c53030; padding:4px 10px; font-size:11px; margin-left:auto;">⚠️ 警告/限流</button>`;
+                ownerActions += `<button onclick="window.warnUser('${topic.user_id}', '${topic.id}')" style="background:transparent; color:#c53030; border:none; font-size:11px; cursor:pointer; padding:0 4px;">警告</button>`;
             }
             ownerActions += `</div>`;
         }
