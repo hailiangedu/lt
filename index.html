@@ -245,10 +245,10 @@ window.togglePostMode = function() {
         toggleBtn.dataset.mode = 'notice';
         toggleBtn.innerText = '切换回发布话题';
         toggleBtn.style.background = '#e53e3e';
-        if (cardTitle) cardTitle.innerText = '📢 发布全局系统通知';
+        if (cardTitle) cardTitle.innerText = '发布系统通知';
         titleInput.placeholder = '通知标题...';
-        contentInput.placeholder = '输入要群发给所有用户的通知内容...';
-        submitBtn.innerText = '确认群发通知';
+        contentInput.placeholder = '输入要发送给所有用户的通知内容...';
+        submitBtn.innerText = '确认发送通知';
         submitBtn.style.background = '#e53e3e';
     } else {
         toggleBtn.dataset.mode = 'topic';
@@ -618,7 +618,7 @@ async function loadCategories() {
     }
 }
 
-// 🛡️ 帖子操作按钮统一右侧对齐，文本精简为“警告”
+// 🛡️ 评论时间调整为完整显示年月日与时间
 async function loadTopics(categoryId) {
     const container = document.getElementById('topics-container');
     container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
@@ -690,7 +690,7 @@ async function loadTopics(categoryId) {
                     <div style="font-size:12px; margin-bottom:6px; padding:4px 0; border-bottom:1px solid rgba(0,0,0,0.03); display:flex; justify-content:space-between; align-items:flex-start;">
                         <div style="line-height:1.4; flex:1; word-break:break-all;">
                             <b class="clickable-name" onclick="window.viewUserProfile('${comment.user_id}')">${cAuthor}</b>: <span style="color:var(--text-color);">${comment.content}</span>
-                            <span style="color:var(--meta-color); font-size:10px; margin-left:6px;">${new Date(comment.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            <span style="color:var(--meta-color); font-size:10px; margin-left:6px;">${new Date(comment.created_at).toLocaleString()}</span>
                             <span onclick="window.replyToUser('${topic.id}', '${cAuthor}')" style="color:var(--primary-color); font-size:11px; cursor:pointer; margin-left:8px; user-select:none;">回复</span>
                         </div>
                         ${canDeleteComment ? `<button onclick="window.deleteComment('${comment.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px; flex-shrink:0;">删除</button>` : ''}
