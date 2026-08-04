@@ -618,7 +618,7 @@ async function loadCategories() {
     }
 }
 
-// 🛡️ 发布者与发布时间调整至帖子正文底部
+// 🛡️ 帖子管理按钮统一样式与布局置于右侧，“⚠️ 警告/限流”改为“警告”
 async function loadTopics(categoryId) {
     const container = document.getElementById('topics-container');
     container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
@@ -664,16 +664,15 @@ async function loadTopics(categoryId) {
 
         let ownerActions = '';
         if (isOwner || isUserAdmin) {
-            ownerActions += `<div style="margin-top:8px; display:flex; gap:8px; align-items:center;">`;
+            let actionItems = [];
             if (isOwner) {
-                ownerActions += `<button onclick="window.openEditModal('${topic.id}', \`${topic.title.replace(/`/g, '\\`')}\`, \`${topic.content.replace(/`/g, '\\`')}\`)" style="background:#d69e2e; padding:4px 10px; font-size:11px;">编辑</button>`;
+                actionItems.append ? actionItems.push(...) : actionItems.push(`<button onclick="window.openEditModal('${topic.id}', \`${topic.title.replace(/`/g, '\\`')}\`, \`${topic.content.replace(/`/g, '\\`')}\`)" style="background:transparent; color:#d69e2e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">编辑</button>`);
             }
-            ownerActions += `<button onclick="window.deleteTopic('${topic.id}')" style="background:#e53e3e; padding:4px 10px; font-size:11px;">删除</button>`;
-            
+            actionItems.push(`<button onclick="window.deleteTopic('${topic.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">删除</button>`);
             if (isUserAdmin) {
-                ownerActions += `<button onclick="window.warnUser('${topic.user_id}', '${topic.id}')" style="background:#c53030; padding:4px 10px; font-size:11px; margin-left:auto;">⚠️ 警告/限流</button>`;
+                actionItems.push(`<button onclick="window.warnUser('${topic.user_id}', '${topic.id}')" style="background:transparent; color:#c53030; border:none; font-size:11px; cursor:pointer; padding:0 4px;">警告</button>`);
             }
-            ownerActions += `</div>`;
+            ownerActions = `<div style="display:flex; gap:4px; align-items:center;">${actionItems.join('')}</div>`;
         }
 
         let commentsHtml = '';
@@ -703,12 +702,12 @@ async function loadTopics(categoryId) {
         div.innerHTML = `
             <h4 style="margin:0 0 6px 0;">${topic.title}</h4>
             <p style="margin:0 0 8px 0; white-space: pre-wrap; font-size:13px;">${topic.content}</p>
-            <div class="flex" style="margin-top:6px; margin-bottom:4px;">
+            <div class="flex" style="margin-top:6px; margin-bottom:4px; align-items:center;">
                 <span style="font-size:11px; color:var(--meta-color);">
                     发布者：<b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${authorName}</b>${badge} &nbsp;|&nbsp; 发布于 ${new Date(topic.created_at).toLocaleString()}
                 </span>
+                ${ownerActions}
             </div>
-            ${ownerActions}
             ${commentsHtml}
             <div style="margin-top:8px; display:flex; gap:6px;">
                 <input type="text" id="comment-input-${topic.id}" placeholder="写下你的评论..." style="font-size:12px; padding:3px 8px; flex:1;">
@@ -787,12 +786,12 @@ window.deleteComment = async function(commentId) {
 };
 
 window.warnUser = async function(userId, topicId) {
-    const reason = prompt('请输入对该用户进行警告或限流的原因（将自动生成系统通知发送给对方）：');
+    const reason = prompt('请输入对该用户进行警告的原因（将自动生成系统通知发送给对方）：');
     if (!reason) return;
 
     await db.from('notifications').insert({
         user_id: userId,
-        title: '⚠️ 违规警告与发帖限流通知',
+        title: '⚠️ 违规警告通知',
         content: `您在论坛发布的内容由于违规已被管理员处理。原因：${reason}`,
         is_read: false
     });
