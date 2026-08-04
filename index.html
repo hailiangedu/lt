@@ -618,6 +618,7 @@ async function loadCategories() {
     }
 }
 
+// 🛡️ 发布者与发布时间调整至帖子正文底部
 async function loadTopics(categoryId) {
     const container = document.getElementById('topics-container');
     container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
@@ -700,13 +701,13 @@ async function loadTopics(categoryId) {
         }
 
         div.innerHTML = `
-            <div class="flex" style="margin-bottom:6px;">
-                <span style="font-size:12px; color:var(--meta-color);">
-                    由 <b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${authorName}</b>${badge} 发布于 ${new Date(topic.created_at).toLocaleString()}
-                </span>
-            </div>
             <h4 style="margin:0 0 6px 0;">${topic.title}</h4>
             <p style="margin:0 0 8px 0; white-space: pre-wrap; font-size:13px;">${topic.content}</p>
+            <div class="flex" style="margin-top:6px; margin-bottom:4px;">
+                <span style="font-size:11px; color:var(--meta-color);">
+                    发布者：<b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${authorName}</b>${badge} &nbsp;|&nbsp; 发布于 ${new Date(topic.created_at).toLocaleString()}
+                </span>
+            </div>
             ${ownerActions}
             ${commentsHtml}
             <div style="margin-top:8px; display:flex; gap:6px;">
@@ -837,7 +838,6 @@ window.deleteTopic = async function(id) {
     }
 };
 
-// 🛡️ 管理员无视用户设置强制可见所有信息，身份文本优化为“普通成员”
 window.viewUserProfile = async function(userId) {
     const modalContent = document.getElementById('modal-user-content');
     const modalTitle = document.getElementById('modal-title');
@@ -856,7 +856,6 @@ window.viewUserProfile = async function(userId) {
     let html = `<div style="font-size:13px; display:flex; flex-direction:column; gap:6px;">`;
     html += `<div><b>身份：</b>${profile.is_admin ? '🛡️ 管理员 (Admin)' : '普通成员'}</div>`;
     
-    // 邮箱展示判断：管理员强制查看或用户自主公开
     if ((isAdminViewer || profile.public_email) && profile.email) {
         const isBypassed = !profile.public_email && isAdminViewer;
         html += `<div><b>绑定邮箱：</b>${profile.email} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
