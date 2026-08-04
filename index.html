@@ -102,19 +102,23 @@ button:hover { opacity: 0.9; }
 
     <!-- 论坛主界面 --> 
     <div id="forum-section" class="hidden"> 
-        <div class="card flex"> 
-            <div> 
-                <h2 style="margin:0;">海高论坛</h2> 
-                <span id="user-profile-summary" style="font-size: 12px; color: var(--meta-color);">加载中...</span> 
-            </div> 
-            <div style="display: flex; gap: 8px;"> 
+        <div class="card flex">             
+            <div style="display: flex; align-items: center; gap: 12px;">                 
+                <div>                     
+                    <h2 style="margin:0;">海高论坛</h2>                     
+                    <span id="user-profile-summary" style="font-size: 12px; color: var(--meta-color);">加载中...</span>                 
+                </div>
+                <!-- 管理员专属切换按钮（默认隐藏，登录后由脚本控制显示） -->
+                <button id="post-mode-toggle" class="hidden" onclick="window.togglePostMode()" data-mode="topic" style="background: #718096; color: #fff; padding: 4px 10px; font-size: 11px; border: none; border-radius: 4px; cursor: pointer;">切换全局通知</button>
+            </div>             
+            <div style="display: flex; gap: 8px;">                 
                 <button onclick="window.openProfile()" style="background:#4a5568; position: relative;"> 
-                    个人中心 <span id="notification-badge" class="hidden" style="position:absolute; top:-5px; right:-5px; background:red; width:10px; height:10px; border-radius:50%;"></span> 
-                </button> 
-                <button onclick="window.toggleTheme()" style="background:none; border:1px solid var(--border-color); color:var(--text-color);">🌓 主题</button> 
-                <button onclick="window.handleLogout()" style="background:#e53e3e;">退出</button> 
-            </div> 
-        </div> 
+                    个人中心 <span id="notification-badge" class="hidden" style="position:absolute; top:-5px; right:-5px; background:red; width:10px; height:10px; border-radius:50%;"></span>                 
+                </buttn>                 
+                <button onclick="window.toggleTheme()" style="background:none; border:1px solid var(--border-color); color:var(--text-color);">🌓 主题</button>                 
+                <button onclick="window.handleLogout()" style="background:#e53e3e;">退出</button>             
+            </div>         
+        </div>
         <div style="display: flex; gap: 20px;" class="main-layout"> 
             <!-- 左侧板块导航 --> 
             <div style="width: 25%;"> 
