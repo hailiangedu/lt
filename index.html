@@ -618,19 +618,17 @@ async function loadCategories() {
     }
 }
 
-// 🛡️ 最终完美渲染：单表独立查询、评论区取消独立卡片改为极致轻量流式排版
+// 🛡️ 最终完美渲染：支持 @ 回复逻辑，剔除冗余管理员徽章，流式极简排列
 async function loadTopics(categoryId) {
     const container = document.getElementById('topics-container');
     container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
     
-    // 1. 获取所有用户资料用于名称与管理员身份安全挂载
     const { data: profilesData } = await db.from('profiles').select('id, nickname, is_admin');
     const profileMap = {};
     if (profilesData) {
         profilesData.forEach(p => { profileMap[p.id] = p; });
     }
 
-    // 2. 加载当前板块下的所有话题
     const { data: topics, error } = await db.from('topics')
         .select('*')
         .eq('category_id', categoryId)
@@ -641,7 +639,6 @@ async function loadTopics(categoryId) {
         return;
     }
 
-    // 3. 独立加载评论（避免触发缺失 replies 表的错误）
     const topicIds = topics.map(t => t.id);
     const { data: comments } = await db.from('comments').select('*').in('topic_id', topicIds);
 
@@ -665,7 +662,6 @@ async function loadTopics(categoryId) {
         const isOwner = currentAuthUser && currentAuthUser.id === topic.user_id;
         const isUserAdmin = currentUserProfile && currentUserProfile.is_admin;
 
-        // 话题操作按钮
         let ownerActions = '';
         if (isOwner || isUserAdmin) {
             ownerActions += `<div style="margin-top:8px; display:flex; gap:8px; align-items:center;">`;
@@ -680,7 +676,6 @@ async function loadTopics(categoryId) {
             ownerActions += `</div>`;
         }
 
-        // 渲染评论列表（无冗余卡片，采用极简流式行排列，节省空间）
         let commentsHtml = '';
         const topicComments = commentMap[topic.id] || [];
         if (topicComments.length > 0) {
@@ -689,15 +684,15 @@ async function loadTopics(categoryId) {
             topicComments.forEach(comment => {
                 const cProfile = profileMap[comment.user_id];
                 const cAuthor = cProfile ? cProfile.nickname : '匿名用户';
-                const cIsAdmin = cProfile && cProfile.is_admin;
-                const cBadge = cIsAdmin ? '<span class="badge-admin">管理员</span>' : '';
+                // 🛡️ 移除了评论发布者的管理员身份标签，使评论区更加纯净、平等
                 const canDeleteComment = (currentAuthUser && currentAuthUser.id === comment.user_id) || isUserAdmin;
 
                 commentsHtml += `
-                    <div style="font-size:12px; margin-bottom:5px; padding:3px 0; border-bottom:1px solid rgba(0,0,0,0.03); display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div style="font-size:12px; margin-bottom:6px; padding:4px 0; border-bottom:1px solid rgba(0,0,0,0.03); display:flex; justify-content:space-between; align-items:flex-start;">
                         <div style="line-height:1.4; flex:1; word-break:break-all;">
-                            <b>${cAuthor}</b>${cBadge}: <span style="color:var(--text-color);">${comment.content}</span>
+                            <b>${cAuthor}</b>: <span style="color:var(--text-color);">${comment.content}</span>
                             <span style="color:var(--meta-color); font-size:10px; margin-left:6px;">${new Date(comment.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            <span onclick="window.replyToUser('${topic.id}', '${cAuthor}')" style="color:var(--primary-color); font-size:11px; cursor:pointer; margin-left:8px; user-select:none;">回复</span>
                         </div>
                         ${canDeleteComment ? `<button onclick="window.deleteComment('${comment.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px; flex-shrink:0;">删除</button>` : ''}
                     </div>
@@ -724,6 +719,15 @@ async function loadTopics(categoryId) {
         container.appendChild(div);
     }
 }
+
+// 🛡️ 点击“回复”时自动在评论输入框中填入 @用户名 格式
+window.replyToUser = function(topicId, authorName) {
+    const input = document.getElementById(`comment-input-${topicId}`);
+    if (input) {
+        input.value = `@${authorName} `;
+        input.focus();
+    }
+};
 
 window.createTopic = async function() {
     const title = document.getElementById('topic-title').value.trim();
@@ -759,7 +763,6 @@ window.createComment = async function(topicId) {
     const content = input.value.trim();
     if (!content) return alert('评论内容不能为空！');
     
-    // 🛡️ 显式带入 user_name 避免触发数据库非空约束报错
     const { error } = await db.from('comments').insert({
         topic_id: topicId,
         user_id: currentAuthUser.id,
