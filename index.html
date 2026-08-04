@@ -364,7 +364,7 @@ window.saveCustomBackground = function() {
             
             localStorage.setItem('forum_custom_bg', compressedDataUrl); 
             document.body.style.backgroundImage = `url("${compressedDataUrl}")`; 
-            alert('自定义背景已完成压缩、应用并保存成功！'); 
+            alert('自定义背景已保存！'); 
         };
         
         img.onerror = function() {
@@ -379,7 +379,7 @@ window.resetCustomBackground = function() {
     localStorage.removeItem('forum_custom_bg'); 
     document.body.style.backgroundImage = ''; 
     document.getElementById('bg-file-input').value = ''; 
-    alert('已成功恢复默认背景 (beijing.png)'); 
+    alert('已成功恢复默认背景'); 
 }; 
 
 window.updatePassword = async function() {
@@ -494,26 +494,34 @@ window.closeUserModal = function() {
             else initUserSession(data.user);
         }
 
-        window.handleRegister = async function() {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
+        window.handleRegister = async function() {            
+            const email = document.getElementById('email').value.trim();            
+            const password = document.getElementById('password').value;            
             const msgEl = document.getElementById('auth-msg');
 
-            if (!email.endsWith('@qq.com') && !email.endsWith('@gmail.com')) {
-                msgEl.innerText = '仅支持后缀为 @qq.com 或 @gmail.com 的邮箱注册！';
+            // 1. 原有的后缀限制校验
+            if (!email.endsWith('@qq.com') && !email.endsWith('@gmail.com')) {                
+                msgEl.innerText = '仅支持后缀为 @qq.com 或 @gmail.com 的邮箱注册！';                
+                return;            
+            }
+
+            // 2. 新增：禁止使用包含 "+" 的别名邮箱（如 user+alias@gmail.com）
+            const localPart = email.split('@')[0];
+            if (localPart.includes('+')) {
+                msgEl.innerText = '为了账号安全，注册暂不支持使用带 "+" 的别名邮箱！';
                 return;
             }
 
-            const { error } = await db.auth.signUp({ 
-                email, 
-                password,
-                options: {
-                    emailRedirectTo: 'https://hailiangedu.github.io/lt/confirm.html'
-                }
-            });
-            
-            if (error) msgEl.innerText = error.message;
-            else alert('注册成功！确认邮件已发送，请查收并点击确认。');
+            const { error } = await db.auth.signUp({                 
+                email,                 
+                password,                
+                options: {                    
+                    emailRedirectTo: 'https://hailiangedu.github.io/lt/confirm.html'                
+                }            
+            });                        
+    
+            if (error) msgEl.innerText = error.message;            
+            else alert('注册成功！确认邮件已发送，请查收并点击确认。');        
         }
 
         window.handleLogout = async function() {
