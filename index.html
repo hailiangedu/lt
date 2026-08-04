@@ -551,22 +551,34 @@ window.handleLogin = async function() {
 
 window.handleRegister = async function() {
     const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
-    const msgEl = document.getElementById('auth-msg');
-    if (!email || !password) {
-        msgEl.innerText = '请输入邮箱和密码';
+    const password = document.getElementById('password').value.trim();
+    const authMsg = document.getElementById('auth-msg');
+    
+    // 1. 定义校验规则：仅允许 QQ 邮箱 或 Gmail 邮箱，且严格排除包含 "+" 的别名邮箱
+    const qqEmailRegex = /^[1-9]\d{4,10}@qq\.com$/i;
+    const gmailRegex = /^[a-zA-Z0-9._]+@gmail\.com$/i;
+
+    // 2. 检查是否包含 "+" 符号（防止通过别名绕过）
+    if (email.includes('+')) {
+        authMsg.innerText = '注册失败：不支持使用包含 "+" 的别名邮箱。';
         return;
     }
-    if (password.length < 6) {
-        msgEl.innerText = '密码长度至少为 6 位';
+
+    // 3. 验证是否为合法的 QQ 邮箱或 Gmail 邮箱
+    if (!qqEmailRegex.test(email) && !gmailRegex.test(email)) {
+        authMsg.innerText = '注册失败：仅限使用标准的 QQ 邮箱或 Gmail 邮箱注册！';
         return;
     }
+
+    // 清空错误提示，继续执行原有的 Supabase 注册逻辑...
+    authMsg.innerText = '';
+    
+    // 示例：Supabase 注册调用
     const { data, error } = await db.auth.signUp({ email, password });
     if (error) {
-        msgEl.innerText = '注册失败: ' + error.message;
+        authMsg.innerText = '注册出错: ' + error.message;
     } else {
-        msgEl.style.color = 'green';
-        msgEl.innerText = '注册成功！请查收邮件验证或直接登录。';
+        alert('注册成功，请查收验证邮件！');
     }
 };
 
