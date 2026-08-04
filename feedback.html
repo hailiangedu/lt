@@ -130,11 +130,14 @@
             // 读取自定义背景配置
             const bgType = localStorage.getItem('forum_bg_type');
             const bgValue = localStorage.getItem('forum_bg_value');
+            
             if (bgType === 'color' && bgValue) {
                 document.body.style.backgroundColor = bgValue;
                 document.body.style.backgroundImage = 'none';
             } else if (bgType === 'image' && bgValue) {
-                document.body.style.backgroundImage = `url(${bgValue})`;
+                // 兼容 Blob URL、Data URL 或常规 URL，确保用单引号包裹防止特殊字符解析失败
+                document.body.style.backgroundImage = `url('${bgValue}')`;
+                document.body.style.backgroundColor = 'transparent'; // 防止背景色遮挡图片
             }
         }
         initTheme();
@@ -154,7 +157,8 @@
                     document.body.style.backgroundColor = bgValue;
                     document.body.style.backgroundImage = 'none';
                 } else if (bgType === 'image' && bgValue) {
-                    document.body.style.backgroundImage = `url(${bgValue})`;
+                    document.body.style.backgroundImage = `url('${bgValue}')`;
+                    document.body.style.backgroundColor = 'transparent';
                 } else {
                     document.body.style.backgroundColor = '';
                     document.body.style.backgroundImage = '';
