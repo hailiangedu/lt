@@ -133,7 +133,7 @@ button:hover { opacity: 0.9; }
                     <h3>发表新话题</h3> 
                     <input type="text" id="topic-title" placeholder="话题标题..."> 
                     <textarea id="topic-content" rows="3" placeholder="分享你的新鲜事、求助或闲置信息..."></textarea> 
-                    <button onclick="window.createTopic()">发布话题</button> 
+                    <button id="post-submit-btn" onclick="window.handlePostSubmit()">发布话题</button> 
                 </div> 
                 <div id="topics-container"></div> 
             </div> 
@@ -221,7 +221,102 @@ button:hover { opacity: 0.9; }
     </div> 
 </div> 
 
-<script> 
+<script>
+// 初始化加载本地自定义背景 
+function initCustomBackground() {    
+    const savedBg = localStorage.getItem('forum_custom_bg');     
+    if (savedBg) {        
+        document.body.style.backgroundImage = `url("${savedBg}")`;     
+    } 
+} 
+initCustomBackground();
+// 切换发表新话题 / 发布通知栏目（管理员专属）
+window.togglePostMode = function() {
+    if (!currentUserProfile || !currentUserProfile.is_admin) return;
+    
+    const isTopicMode = document.getElementById('post-mode-toggle').dataset.mode === 'topic';
+    const titleInput = document.getElementById('topic-title');
+    const contentInput = document.getElementById('topic-content');
+    const submitBtn = document.getElementById('post-submit-btn');
+    const toggleBtn = document.getElementById('post-mode-toggle');
+    const sectionTitle = document.getElementById('post-section-title');
+
+    if (isTopicMode) {
+        // 切换为：发布全局通知模式
+        toggleBtn.dataset.mode = 'notice';
+        toggleBtn.innerText = '切换回发布话题';
+        toggleBtn.style.background = '#e53e3e';
+        sectionTitle.innerText = '📢 发布全局系统通知';
+        titleInput.placeholder = '通知标题...';
+        contentInput.placeholder = '输入要群发给所有用户的通知内容...';
+        submitBtn.innerText = '确认群发通知';
+        submitBtn.style.background = '#e53e3e';
+    } else {
+        // 切换回：发表话题模式
+        toggleBtn.dataset.mode = 'topic';
+        toggleBtn.innerText = '切换全局通知';
+        toggleBtn.style.background = '#718096';
+        sectionTitle.innerText = '发表新话题';
+        titleInput.placeholder = '话题标题...';
+        contentInput.placeholder = '分享你的新鲜事、求助或闲置信息...';
+        submitBtn.innerText = '发布话题';
+        submitBtn.style.background = '';
+    }
+};
+
+// 重写原有的发布分发逻辑（兼容发布话题与群发全局通知）
+window.handlePostSubmit = async function() {
+    const isTopicMode = document.getElementById('post-mode-toggle').dataset.mode === 'topic';
+    
+    if (isTopicMode) {
+        // 原有的发布话题逻辑
+        window.createTopic();
+    } else {
+        // 新增：群发全局系统通知逻辑
+        if (!currentUserProfile || !currentUserProfile.is_admin) {
+            alert('权限不足！');
+            return;
+        }
+        
+        const title = document.getElementById('topic-title').value.trim();
+        const content = document.getElementById('topic-content').value.trim();
+        
+        if (!title || !content) {
+            alert('通知标题和内容不能为空！');
+            return;
+        }
+
+        if (!confirm('确定要向全体注册用户发送该系统通知吗？')) return;
+
+        // 1. 获取所有用户的 ID
+        const { data: profiles, error: profileErr } = await db.from('profiles').select('id');
+        if (profileErr || !profiles || profiles.length === 0) {
+            alert('获取用户列表失败: ' + (profileErr ? profileErr.message : '无用户'));
+            return;
+        }
+
+        // 2. 批量构建通知数据（注明发送者为当前管理员昵称）
+        const senderName = currentUserProfile.nickname || '管理员';
+        const notificationsData = profiles.map(user => ({
+            user_id: user.id,
+            title: `[系统通知] ${title}`,
+            content: `${content} (发送者: ${senderName})`,
+            is_read: false
+        }));
+
+        // 3. 写入通知表
+        const { error: insertErr } = await db.from('notifications').insert(notificationsData);
+        if (insertErr) {
+            alert('发布通知失败: ' + insertErr.message);
+        } else {
+            alert(`成功向 ${profiles.length} 名用户发布了系统通知！`);
+            document.getElementById('topic-title').value = '';
+            document.getElementById('topic-content').value = '';
+            // 自动切回话题模式
+            window.togglePostMode();
+        }
+    }
+};    
 const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co'; 
 const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW'; 
 window.sbApp = window.sbApp || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); 
@@ -229,15 +324,6 @@ const db = window.sbApp;
 let currentCategoryId = null; 
 let currentUserProfile = null; 
 let currentAuthUser = null; 
-
-// 初始化加载本地自定义背景 
-function initCustomBackground() {
-    const savedBg = localStorage.getItem('forum_custom_bg'); 
-    if (savedBg) {
-        document.body.style.backgroundImage = `url("${savedBg}")`; 
-    } 
-} 
-initCustomBackground(); 
 
 db.auth.getSession().then(({ data: { session } }) => {
     if (session) initUserSession(session.user); 
@@ -252,6 +338,13 @@ async function initUserSession(user) {
     checkUnreadNotifications(user.id); 
     showForum(); 
 } 
+
+    // 当确认当前用户是管理员时（例如在 initUserSession 或类似函数中）：
+    if (currentUserProfile && currentUserProfile.is_admin) {
+    // 显式展示管理员专属的通知切换按钮
+        const toggleBtn = document.getElementById('post-mode-toggle');
+        if (toggleBtn) toggleBtn.classList.remove('hidden');
+    }
 
 async function checkUnreadNotifications(userId) {
     const { data } = await db.from('notifications').select('*').eq('user_id', userId).eq('is_read', false); 
