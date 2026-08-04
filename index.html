@@ -625,21 +625,23 @@ async function loadCategories() {
 async function loadTopics(categoryId) {
     const container = document.getElementById('topics-container');
     container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
+    
+    // 👉 优化点：直接查询话题表，不再强依赖外键关联，彻底解决加载空白问题
     const { data, error } = await db.from('topics')
-        .select(`*, profiles(nickname, is_admin)`)
+        .select('*')
         .eq('category_id', categoryId)
         .order('created_at', { ascending: false });
+
     if (error || !data || data.length === 0) {
         container.innerHTML = '<div class="card"><p style="font-size:13px; color:var(--meta-color); margin:0;">该板块下暂无话题，快来发表第一个话题吧！</p></div>';
         return;
     }
+    
     container.innerHTML = '';
     for (const topic of data) {
         const div = document.createElement('div');
         div.className = 'card';
-        const authorName = topic.profiles ? topic.profiles.nickname : (topic.user_name || '匿名用户');
-        const isAdmin = topic.profiles && topic.profiles.is_admin;
-        const badge = isAdmin ? '<span class="badge-admin">管理员</span>' : '';
+        const authorName = topic.user_name || '匿名用户';
         const isOwner = currentAuthUser && currentAuthUser.id === topic.user_id;
         const ownerActions = (isOwner || (currentUserProfile && currentUserProfile.is_admin)) ? 
             `<div style="margin-top:8px; display:flex; gap:8px;">
@@ -650,7 +652,7 @@ async function loadTopics(categoryId) {
         div.innerHTML = `
             <div class="flex" style="margin-bottom:6px;">
                 <span style="font-size:12px; color:var(--meta-color);">
-                    由 <b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${authorName}</b>${badge} 发布于 ${new Date(topic.created_at).toLocaleString()}
+                    由 <b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${authorName}</b> 发布于 ${new Date(topic.created_at).toLocaleString()}
                 </span>
             </div>
             <h4 style="margin:0 0 6px 0;">${topic.title}</h4>
@@ -673,7 +675,6 @@ window.createTopic = async function() {
         return;
     }
     
-    // 👉 修复点：显式将当前用户的 nickname 传给数据库的 user_name 字段，避免违反非空约束
     const { error } = await db.from('topics').insert({
         category_id: currentCategoryId,
         user_id: currentAuthUser.id,
