@@ -234,19 +234,21 @@ initCustomBackground();
 // 切换发表新话题 / 发布通知栏目（管理员专属）
 window.togglePostMode = function() {
     if (!currentUserProfile || !currentUserProfile.is_admin) return;
-    const isTopicMode = document.getElementById('post-mode-toggle').dataset.mode === 'topic';
+    const toggleBtn = document.getElementById('post-mode-toggle');
+    const isTopicMode = toggleBtn.dataset.mode === 'topic';
     const titleInput = document.getElementById('topic-title');
     const contentInput = document.getElementById('topic-content');
     const submitBtn = document.getElementById('post-submit-btn');
-    const toggleBtn = document.getElementById('post-mode-toggle');
-    const sectionTitle = document.getElementById('post-section-title');
+    
+    // 定位到“发表新话题”卡片中的 h3 标题
+    const cardTitle = document.querySelector('#forum-section .card h3');
 
     if (isTopicMode) {
         // 切换为：发布全局通知模式
         toggleBtn.dataset.mode = 'notice';
         toggleBtn.innerText = '切换回发布话题';
         toggleBtn.style.background = '#e53e3e';
-        sectionTitle.innerText = '📢 发布全局系统通知';
+        if (cardTitle) cardTitle.innerText = '📢 发布全局系统通知';
         titleInput.placeholder = '通知标题...';
         contentInput.placeholder = '输入要群发给所有用户的通知内容...';
         submitBtn.innerText = '确认群发通知';
@@ -256,7 +258,7 @@ window.togglePostMode = function() {
         toggleBtn.dataset.mode = 'topic';
         toggleBtn.innerText = '切换全局通知';
         toggleBtn.style.background = '#718096';
-        sectionTitle.innerText = '发表新话题';
+        if (cardTitle) cardTitle.innerText = '发表新话题';
         titleInput.placeholder = '话题标题...';
         contentInput.placeholder = '分享你的新鲜事、求助或闲置信息...';
         submitBtn.innerText = '发布话题';
@@ -271,7 +273,7 @@ window.handlePostSubmit = async function() {
         // 原有的发布话题逻辑
         window.createTopic();
     } else {
-        // 新增：群发全局系统通知逻辑
+        // 群发全局系统通知逻辑
         if (!currentUserProfile || !currentUserProfile.is_admin) {
             alert('权限不足！');
             return;
@@ -291,7 +293,7 @@ window.handlePostSubmit = async function() {
             return;
         }
 
-        // 2. 批量构建通知数据（注明发送者为当前管理员昵称）
+        // 2. 批量构建通知数据
         const senderName = currentUserProfile.nickname || '管理员';
         const notificationsData = profiles.map(user => ({
             user_id: user.id,
@@ -421,7 +423,6 @@ window.closeProfile = function() {
     showForum();
 }
 
-// 自定义背景图片压缩并保存功能
 window.saveCustomBackground = function() {
     const fileInput = document.getElementById('bg-file-input');
     if (!fileInput.files || !fileInput.files[0]) {
