@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>意见反馈</title>
+    <!-- 引入 Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --bg-color: #f4f6f8;
+            --card-bg: #ffffff;
+            --text-color: #2d3748;
+            --meta-color: #718096;
+            --border-color: #e2e8f0;
+            --primary-color: #3182ce;
+        }
+
+        [data-theme="dark"] {
+            --bg-color: #1a202c;
+            --card-bg: #2d3748;
+            --text-color: #f7fafc;
+            --meta-color: #a0aec0;
+            --border-color: #4a5568;
+            --primary-color: #63b3ed;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 24px;
+            width: 100%;
+            max-width: 500px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 20px;
+            margin-bottom: 16px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background-color: var(--card-bg);
+            color: var(--text-color);
+            resize: vertical;
+            box-sizing: border-box;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }
+
+        .btn-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .back-link {
+            font-size: 13px;
+            color: var(--meta-color);
+            text-decoration: none;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>意见反馈</h2>
+    <p style="font-size: 13px; color: var(--meta-color); margin-bottom: 12px;">
+        如果您在使用论坛时遇到任何问题或有好的建议，请随时提交。您的反馈将发送给所有管理员。
+    </p>
+    
+    <textarea id="feedback-content" placeholder="请详细描述您遇到的问题或建议..."></textarea>
+    
+    <div class="btn-group">
+        <a href="index.html" class="back-link">← 返回论坛首页</a>
+        <button onclick="submitFeedback()">提交反馈</button>
+    </div>
+</div>
+
+<script>
+    // 初始化主题
+    function initTheme() {
+        const savedTheme = localStorage.getItem('forum_theme');
+        if (savedTheme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+    }
+    initTheme();
+
+    // Supabase 配置（与主页保持一致）
+    const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function submitFeedback() {
+        const contentInput = document.getElementById('feedback-content');
+        const content = contentInput.value.trim();
+
+        if (!content) {
+            alert('反馈内容不能为空！');
+            return;
+        }
+
+        // 检查当前用户是否登录
+        const { data: { session } } = await db.auth.getSession();
+        if (!session) {
+            alert('请先登录后再提交反馈！');
+            window.location.href = 'index.html';
+            return;
+        }
+
+        const userId = session.user.id;
+
+        // 获取当前用户的昵称
+        const { data: profile } = await db.from('profiles').select('nickname').eq('id', userId).single();
+        const userName = profile ? profile.nickname : session.user.email.split('@')[0];
+
+        // 1. 查询所有管理员用户的 ID
+        const { data: admins, error: adminErr } = await db.from('profiles').select('id').eq('is_admin', true);
+        
+        if (adminErr || !admins || admins.length === 0) {
+            alert('当前暂无管理员接收反馈，提交失败。');
+            return;
+        }
+
+        // 2. 组装发给所有管理员的通知数据
+        const notificationsData = admins.map(admin => ({
+            user_id: admin.id,
+            title: `收到新的意见反馈 (来自: ${userName})`,
+            content: content,
+            is_read: false
+        }));
+
+        // 3. 批量写入 notifications 表
+        const { error: insertErr } = await db.from('notifications').insert(notificationsData);
+
+        if (insertErr) {
+            alert('反馈提交失败: ' + insertErr.message);
+        } else {
+            alert('反馈提交成功！感谢您的宝贵意见，管理员已收到通知。');
+            contentInput.value = '';
+        }
+    }
+</script>
+
+</body>
+</html>
