@@ -1,530 +1,491 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>海高论坛</title>
-    <!-- 引入 Supabase SDK -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <style>
-        :root {
-            --bg-color: #f4f6f8;
-            --text-color: #2d3748;
-            --card-bg: rgba(255, 255, 255, 0.92);
-            --border-color: #e2e8f0;
-            --primary-color: #2b6cb0;
-            --meta-color: #718096;
-            --hover-bg: #ebf8ff;
-            --admin-badge: #e53e3e;
-            --warning-bg: #fff5f5;
-            --custom-bg: url('beijing.png');
-        }
-        [data-theme="dark"] {
-            --bg-color: #1a202c;
-            --text-color: #e2e8f0;
-            --card-bg: rgba(45, 55, 72, 0.92);
-            --border-color: #4a5568;
-            --primary-color: #94a3b8;
-            --meta-color: #a0aec0;
-            --hover-bg: #334155;
-            --admin-badge: #fc8181;
-            --warning-bg: #2d1a1a;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            margin: 0; padding: 20px;
-            box-sizing: border-box;
-            background-image: var(--custom-bg);
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-        }
-        body::before {
-            content: "";
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: var(--bg-color);
-            opacity: 0.5;
-            z-index: -1;
-            pointer-events: none;
-        }
-        .container { max-width: 950px; margin: 0 auto; }
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 15px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            backdrop-filter: blur(4px);
-        }
-        .hidden { display: none !important; }
-        input, textarea, select {
-            width: 100%; padding: 10px; margin-bottom: 8px;
-            background: var(--card-bg); color: var(--text-color);
-            border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box;
-        }
-        button {
-            background-color: var(--primary-color); color: white;
-            border: none; padding: 10px 16px; border-radius: 6px;
-            cursor: pointer; font-weight: 600;
-        }
-        button:hover { opacity: 0.9; }
-        .flex { display: flex; justify-content: space-between; align-items: center; }
+<!DOCTYPE html> 
+<html lang="zh-CN"> 
+<head> 
+<meta charset="UTF-8"> 
+<meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+<title>海高论坛</title> 
+<!-- 引入 Supabase SDK --> 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> 
+<style> 
+:root {
+    --bg-color: #f4f6f8; 
+    --text-color: #2d3748; 
+    --card-bg: rgba(255, 255, 255, 0.92); 
+    --border-color: #e2e8f0; 
+    --primary-color: #2b6cb0; 
+    --meta-color: #718096; 
+    --hover-bg: #ebf8ff; 
+    --admin-badge: #e53e3e; 
+    --warning-bg: #fff5f5; 
+    --custom-bg: url('beijing.png'); 
+} 
+[data-theme="dark"] {
+    --bg-color: #1a202c; 
+    --text-color: #e2e8f0; 
+    --card-bg: rgba(45, 55, 72, 0.92); 
+    --border-color: #4a5568; 
+    --primary-color: #94a3b8; 
+    --meta-color: #a0aec0; 
+    --hover-bg: #334155; 
+    --admin-badge: #fc8181; 
+    --warning-bg: #2d1a1a; 
+} 
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+    background-color: var(--bg-color); 
+    color: var(--text-color); 
+    margin: 0; 
+    padding: 20px; 
+    box-sizing: border-box; 
+    background-image: var(--custom-bg); 
+    background-size: cover; 
+    background-position: center; 
+    background-attachment: fixed; 
+} 
+body::before {
+    content: ""; 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%; 
+    background-color: var(--bg-color); 
+    opacity: 0.5; 
+    z-index: -1; 
+    pointer-events: none; 
+} 
+.container { max-width: 950px; margin: 0 auto; } 
+.card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); backdrop-filter: blur(4px); } 
+.hidden { display: none !important; } 
+input, textarea, select { width: 100%; padding: 10px; margin-bottom: 8px; background: var(--card-bg); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; } 
+button { background-color: var(--primary-color); color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; } 
+button:hover { opacity: 0.9; } 
+.flex { display: flex; justify-content: space-between; align-items: center; } 
+.category-item { padding: 10px 12px; cursor: pointer; border-radius: 6px; margin-bottom: 6px; font-weight: 500; transition: background 0.2s, color 0.2s; } 
+.category-item:hover { background-color: var(--hover-bg); } 
+.category-item.active { background-color: var(--primary-color); color: white; } 
+.badge-admin { background-color: var(--admin-badge); color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle; } 
+.warning-card { background-color: var(--warning-bg) !important; border-left: 4px solid var(--admin-badge); } 
+.clickable-name { color: var(--primary-color); cursor: pointer; text-decoration: underline; } 
+.profile-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; } 
+.profile-row label { width: 80px; font-size: 12px; color: var(--meta-color); flex-shrink: 0; } 
+
+/* 移动端屏幕（<=768px）：字体与间距缩小，PC端保持绝对不变 */ 
+@media (max-width: 768px) {
+    body { font-size: 12px; padding: 6px; } 
+    h2 { font-size: 1.1rem; } 
+    h3 { font-size: 0.95rem; } 
+    h4 { font-size: 0.85rem; } 
+    .card { padding: 10px; margin-bottom: 8px; border-radius: 6px; } 
+    input, textarea, select, button { font-size: 12px; padding: 6px 8px; margin-bottom: 6px; } 
+    .profile-row label { font-size: 11px; width: 65px; } 
+    .main-layout { flex-direction: column !important; gap: 10px !important; } 
+    .main-layout > div { width: 100% !important; } 
+} 
+</style> 
+</head> 
+<body> 
+<div class="container"> 
+    <!-- 登录/注册面板 --> 
+    <div id="auth-section" class="card" style="max-width: 400px; margin: 50px auto; position: relative;"> 
+        <button onclick="window.toggleTheme()" style="position: absolute; top: 20px; right: 20px; background: none; border: 1px solid var(--border-color); color: var(--text-color); padding: 5px 10px; font-size: 12px;">🌓 主题</button> 
+        <h2>海高论坛登录 / 注册</h2> 
+        <p style="font-size: 13px; color: var(--meta-color);">支持 QQ 邮箱与 Gmail 邮箱注册</p> 
+        <input type="email" id="email" placeholder="请输入邮箱地址"> 
+        <input type="password" id="password" placeholder="请输入密码 (至少6位)"> 
+        <div style="display: flex; gap: 10px;"> 
+            <button onclick="window.handleLogin()" style="flex:1;">登录</button> 
+            <button onclick="window.handleRegister()" style="flex:1; background-color:#3182ce;">注册</button> 
+        </div> 
+        <p id="auth-msg" style="color: red; font-size: 13px; margin-top: 10px;"></p> 
+    </div> 
+
+    <!-- 论坛主界面 --> 
+    <div id="forum-section" class="hidden"> 
+        <div class="card flex"> 
+            <div> 
+                <h2 style="margin:0;">海高论坛</h2> 
+                <span id="user-profile-summary" style="font-size: 12px; color: var(--meta-color);">加载中...</span> 
+            </div> 
+            <div style="display: flex; gap: 8px;"> 
+                <button onclick="window.openProfile()" style="background:#4a5568; position: relative;"> 
+                    个人中心 <span id="notification-badge" class="hidden" style="position:absolute; top:-5px; right:-5px; background:red; width:10px; height:10px; border-radius:50%;"></span> 
+                </button> 
+                <button onclick="window.toggleTheme()" style="background:none; border:1px solid var(--border-color); color:var(--text-color);">🌓 主题</button> 
+                <button onclick="window.handleLogout()" style="background:#e53e3e;">退出</button> 
+            </div> 
+        </div> 
+        <div style="display: flex; gap: 20px;" class="main-layout"> 
+            <!-- 左侧板块导航 --> 
+            <div style="width: 25%;"> 
+                <div class="card"> 
+                    <h3>讨论板块</h3> 
+                    <div id="categories-list">加载中...</div> 
+                </div> 
+            </div> 
+            <!-- 右侧话题列表 --> 
+            <div style="width: 75%;"> 
+                <div class="card"> 
+                    <h3>发表新话题</h3> 
+                    <input type="text" id="topic-title" placeholder="话题标题..."> 
+                    <textarea id="topic-content" rows="3" placeholder="分享你的新鲜事、求助或闲置信息..."></textarea> 
+                    <button onclick="window.createTopic()">发布话题</button> 
+                </div> 
+                <div id="topics-container"></div> 
+            </div> 
+        </div> 
+    </div> 
+
+    <!-- 编辑话题弹窗 --> 
+    <div id="edit-modal" class="card hidden" style="max-width: 500px; margin: 100px auto; position: fixed; top: 15%; left: 50%; transform: translateX(-50%); z-index: 1000; box-shadow: 0 10px 25px rgba(0,0,0,0.3);"> 
+        <h3 style="margin-top:0;">编辑话题</h3> 
+        <input type="hidden" id="edit-topic-id"> 
+        <input type="text" id="edit-topic-title" placeholder="修改标题..."> 
+        <textarea id="edit-topic-content" rows="4" placeholder="修改内容..."></textarea> 
+        <div style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 8px;"> 
+            <button onclick="window.closeEditModal()" style="background:#718096; padding: 6px 14px;">取消</button> 
+            <button onclick="window.saveEditedTopic()" style="padding: 6px 14px;">保存修改</button> 
+        </div> 
+    </div> 
+
+    <!-- 个人中心及详细资料面板 --> 
+    <div id="profile-section" class="card hidden" style="max-width: 650px; margin: 20px auto;"> 
+        <h3>个人中心与详细资料</h3> 
+        <p style="font-size: 13px; color: var(--meta-color);">完善个人资料，勾选复选框可控制信息是否向其他用户公开</p> 
+        <div style="display: flex; gap: 15px; margin-bottom: 12px; align-items: center;"> 
+            <div style="flex: 1;"> 
+                <label style="font-size: 12px; color:var(--meta-color);">绑定邮箱：</label> 
+                <input type="text" id="profile-email" disabled style="background: var(--bg-color); margin-bottom:0;"> 
+            </div> 
+            <div style="padding-top: 18px;"> 
+                <label style="font-size: 11px;"><input type="checkbox" id="pub-email"> 完全公开邮箱</label> 
+            </div> 
+        </div> 
+        <div style="margin-bottom: 15px;"> 
+            <label style="font-size: 12px; color:var(--meta-color);">当前身份：</label> 
+            <input type="text" id="profile-role" disabled style="background: var(--bg-color);"> 
+        </div> 
+        <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;"> 
         
-        .category-item {
-            padding: 10px 12px; cursor: pointer; border-radius: 6px;
-            margin-bottom: 6px; font-weight: 500; transition: background 0.2s, color 0.2s;
-        }
-        .category-item:hover { background-color: var(--hover-bg); }
-        .category-item.active { background-color: var(--primary-color); color: white; }
-
-        .badge-admin {
-            background-color: var(--admin-badge); color: white;
-            font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-left: 6px; vertical-align: middle;
-        }
-        .warning-card {
-            background-color: var(--warning-bg) !important;
-            border-left: 4px solid var(--admin-badge);
-        }
-        .clickable-name {
-            color: var(--primary-color);
-            cursor: pointer;
-            text-decoration: underline;
-        }
-        .profile-row {
-            display: flex; gap: 10px; align-items: center; margin-bottom: 8px;
-        }
-        .profile-row label {
-            width: 80px; font-size: 12px; color: var(--meta-color); flex-shrink: 0;
-        }
-
-        /* 移动端屏幕（<=768px）：字体与间距缩小，PC端保持绝对不变 */
-        @media (max-width: 768px) {
-            body {
-                font-size: 12px;
-                padding: 6px;
-            }
-            h2 { font-size: 1.1rem; }
-            h3 { font-size: 0.95rem; }
-            h4 { font-size: 0.85rem; }
-            .card {
-                padding: 10px;
-                margin-bottom: 8px;
-                border-radius: 6px;
-            }
-            input, textarea, select, button {
-                font-size: 12px;
-                padding: 6px 8px;
-                margin-bottom: 6px;
-            }
-            .profile-row label {
-                font-size: 11px;
-                width: 65px;
-            }
-            .main-layout {
-                flex-direction: column !important;
-                gap: 10px !important;
-            }
-            .main-layout > div {
-                width: 100% !important;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <!-- 登录/注册面板 -->
-        <div id="auth-section" class="card" style="max-width: 400px; margin: 50px auto; position: relative;">
-            <button onclick="window.toggleTheme()" style="position: absolute; top: 20px; right: 20px; background: none; border: 1px solid var(--border-color); color: var(--text-color); padding: 5px 10px; font-size: 12px;">🌓 主题</button>
-            
-            <h2>海高论坛登录 / 注册</h2>
-            <p style="font-size: 13px; color: var(--meta-color);">支持 QQ 邮箱与 Gmail 邮箱注册</p>
-            <input type="email" id="email" placeholder="请输入邮箱地址">
-            <input type="password" id="password" placeholder="请输入密码 (至少6位)">
-            <div style="display: flex; gap: 10px;">
-                <button onclick="window.handleLogin()" style="flex:1;">登录</button>
-                <button onclick="window.handleRegister()" style="flex:1; background-color:#3182ce;">注册</button>
-            </div>
-            <p id="auth-msg" style="color: red; font-size: 13px; margin-top: 10px;"></p>
-        </div>
-
-        <!-- 论坛主界面 -->
-        <div id="forum-section" class="hidden">
-            <div class="card flex">
-                <div>
-                    <h2 style="margin:0;">海高论坛</h2>
-                    <span id="user-profile-summary" style="font-size: 12px; color: var(--meta-color);">加载中...</span>
-                </div>
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="window.openProfile()" style="background:#4a5568; position: relative;">
-                        个人中心 <span id="notification-badge" class="hidden" style="position:absolute; top:-5px; right:-5px; background:red; width:10px; height:10px; border-radius:50%;"></span>
-                    </button>
-                    <button onclick="window.toggleTheme()" style="background:none; border:1px solid var(--border-color); color:var(--text-color);">🌓 主题</button>
-                    <button onclick="window.handleLogout()" style="background:#e53e3e;">退出</button>
-                </div>
-            </div>
-            
-            <div style="display: flex; gap: 20px;" class="main-layout">
-                <!-- 左侧板块导航 -->
-                <div style="width: 25%;">
-                    <div class="card">
-                        <h3>讨论板块</h3>
-                        <div id="categories-list">加载中...</div>
-                    </div>
-                </div>
-                <!-- 右侧话题列表 -->
-                <div style="width: 75%;">
-                    <div class="card">
-                        <h3>发表新话题</h3>
-                        <input type="text" id="topic-title" placeholder="话题标题...">
-                        <textarea id="topic-content" rows="3" placeholder="分享你的新鲜事、求助或闲置信息..."></textarea>
-                        <button onclick="window.createTopic()">发布话题</button>
-                    </div>
-                    <div id="topics-container"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 编辑话题弹窗 -->
-        <div id="edit-modal" class="card hidden" style="max-width: 500px; margin: 100px auto; position: fixed; top: 15%; left: 50%; transform: translateX(-50%); z-index: 1000; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
-            <h3 style="margin-top:0;">编辑话题</h3>
-            <input type="hidden" id="edit-topic-id">
-            <input type="text" id="edit-topic-title" placeholder="修改标题...">
-            <textarea id="edit-topic-content" rows="4" placeholder="修改内容..."></textarea>
-            <div style="margin-top: 15px; display: flex; justify-content: flex-end; gap: 8px;">
-                <button onclick="window.closeEditModal()" style="background:#718096; padding: 6px 14px;">取消</button>
-                <button onclick="window.saveEditedTopic()" style="padding: 6px 14px;">保存修改</button>
-            </div>
-        </div>
-
-        <!-- 个人中心及详细资料面板 -->
-        <div id="profile-section" class="card hidden" style="max-width: 650px; margin: 20px auto;">
-            <h3>个人中心与详细资料</h3>
-            <p style="font-size: 13px; color: var(--meta-color);">完善个人资料，勾选复选框可控制信息是否向其他用户公开</p>
-            
-            <div style="display: flex; gap: 15px; margin-bottom: 12px; align-items: center;">
-                <div style="flex: 1;">
-                    <label style="font-size: 12px; color:var(--meta-color);">绑定邮箱：</label>
-                    <input type="text" id="profile-email" disabled style="background: var(--bg-color); margin-bottom:0;">
-                </div>
-                <div style="padding-top: 18px;">
-                    <label style="font-size: 11px;"><input type="checkbox" id="pub-email"> 完全公开邮箱</label>
-                </div>
-            </div>
-
-            <div style="margin-bottom: 15px;">
-                <label style="font-size: 12px; color:var(--meta-color);">当前身份：</label>
-                <input type="text" id="profile-role" disabled style="background: var(--bg-color);">
-            </div>
-
-            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
-
-            <!-- 扩展资料填写 -->
-            <div class="profile-row"><label>昵称：</label><input type="text" id="p-nickname" style="margin-bottom:0;"><span style="font-size:12px; color:var(--meta-color); width:60px;">必填</span></div>
-            <div class="profile-row"><label>真实姓名：</label><input type="text" id="p-real-name" style="margin-bottom:0;"><label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-real-name"> 公开</label></div>
-            <div class="profile-row"><label>手机号：</label><input type="text" id="p-phone" style="margin-bottom:0;"><label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-phone"> 公开</label></div>
-            <div class="profile-row"><label>性别：</label><input type="text" id="p-gender" placeholder="如: 男/女" style="margin-bottom:0;"><label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-gender" checked> 公开</label></div>
-            <div class="profile-row"><label>年龄：</label><input type="number" id="p-age" style="margin-bottom:0;"><label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-age" checked> 公开</label></div>
-            <div class="profile-row"><label>生日：</label><input type="text" id="p-birthday" placeholder="如: 05-20" style="margin-bottom:0;"><label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-birthday" checked> 公开</label></div>
-            <div class="profile-row"><label>星座：</label><input type="text" id="p-constellation" placeholder="如: 金牛座" style="margin-bottom:0;"><label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-constellation" checked> 公开</label></div>
-            <div class="profile-row"><label>故乡：</label><input type="text" id="p-hometown" placeholder="如: 北京" style="margin-bottom:0;"><label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-hometown" checked> 公开</label></div>
-
-            <button onclick="window.updateProfile()" style="margin-top: 15px; width: 100%;">保存全部修改</button>
-            <p id="profile-msg" style="color: green; font-size: 13px; margin: 8px 0; text-align:center;"></p>
-
-            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
-
-            <!-- 修改密码功能区块 -->
-            <h4 style="margin: 0 0 6px 0;">账号密码修改</h4>
-            <p style="font-size:12px; color:var(--meta-color); margin-bottom:8px;">请输入您的新密码（至少 6 位字符）：</p>
-            <input type="password" id="new-password" placeholder="请输入新密码..." style="margin-bottom:8px;">
-            <button onclick="window.updatePassword()" style="background:#d69e2e; padding: 6px 14px; font-size:12px; width:100%;">确认修改密码</button>
-            <p id="password-msg" style="font-size: 12px; margin: 6px 0 0 0; text-align:center;"></p>
-
-            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;">
-
-            <!-- 自定义背景设置 -->
-            <h4 style="margin: 0 0 6px 0;">自定义背景</h4>
-            <p style="font-size:12px; color:var(--meta-color); margin-bottom:8px;">上传图片将保存在浏览器本地，各会话相互独立</p>
-            <input type="file" id="bg-file-input" accept="image/*" style="margin-bottom:8px;">
-            <div style="display: flex; gap: 8px; margin-bottom: 15px;">
-                <button onclick="window.saveCustomBackground()" style="padding: 6px 12px; font-size:12px; flex:1;">应用背景</button>
-                <button onclick="window.resetCustomBackground()" style="background:#718096; padding: 6px 12px; font-size:12px; flex:1;">恢复默认</button>
-            </div>
-
-            <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
-
-            <h4 style="margin: 0 0 10px 0;">🔔 我的消息通知</h4>
-            <div id="notifications-list" style="max-height: 200px; overflow-y: auto;">加载中...</div>
-
-            <div style="margin-top: 20px; text-align: right;">
-                <button onclick="window.closeProfile()" style="background-color: #718096; padding: 8px 20px;">返回论坛</button>
-            </div>
-        </div>
-
-        <!-- 查看他人公开资料弹窗 -->
-        <div id="user-modal" class="card hidden" style="max-width: 450px; margin: 100px auto; position: fixed; top: 15%; left: 50%; transform: translateX(-50%); z-index: 1000; box-shadow: 0 10px 25px rgba(0,0,0,0.3);">
-            <h3 id="modal-title" style="margin-top:0;">用户资料</h3>
-            <div id="modal-user-content">加载中...</div>
-            <div style="margin-top: 15px; text-align: right;">
-                <button onclick="window.closeUserModal()" style="background:#718096; padding: 6px 14px;">关闭</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
+        <!-- 扩展资料填写 --> 
+        <div class="profile-row"><label>昵称：</label><input type="text" id="p-nickname" style="margin-bottom:0;"><span style="font-size:12px; color:var(--meta-color); width:60px;">必填</span></div> 
+        <div class="profile-row"><label>真实姓名：</label><input type="text" id="p-real-name" style="margin-bottom:0;"><label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-real-name"> 公开</label></div> 
+        <div class="profile-row"><label>手机号：</label><input type="text" id="p-phone" style="margin-bottom:0;"><label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-phone"> 公开</label></div> 
+        <div class="profile-row"><label>性别：</label><input type="text" id="p-gender" placeholder="如: 男/女" style="margin-bottom:0;"><label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-gender" checked> 公开</label></div> 
+        <div class="profile-row"><label>年龄：</label><input type="number" id="p-age" style="margin-bottom:0;"><label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-age" checked> 公开</label></div> 
+        <div class="profile-row"><label>生日：</label><input type="text" id="p-birthday" placeholder="如: 05-20" style="margin-bottom:0;"><label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-birthday" checked> 公开</label></div> 
+        <div class="profile-row"><label>星座：</label><input type="text" id="p-constellation" placeholder="如: 金牛座" style="margin-bottom:0;"><label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-constellation" checked> 公开</label></div> 
+        <div class="profile-row"><label>故乡：</label><input type="text" id="p-hometown" placeholder="如: 北京" style="margin-bottom:0;"><label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-hometown" checked> 公开</label></div> 
+        <button onclick="window.updateProfile()" style="margin-top: 15px; width: 100%;">保存全部修改</button> 
+        <p id="profile-msg" style="color: green; font-size: 13px; margin: 8px 0; text-align:center;"></p> 
         
-        window.sbApp = window.sbApp || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        const db = window.sbApp;
+        <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;"> 
+        
+        <!-- 修改密码功能区块 --> 
+        <h4 style="margin: 0 0 6px 0;">账号密码修改</h4> 
+        <p style="font-size:12px; color:var(--meta-color); margin-bottom:8px;">请输入您的新密码（至少 6 位字符）：</p> 
+        <input type="password" id="new-password" placeholder="请输入新密码..." style="margin-bottom:8px;"> 
+        <button onclick="window.updatePassword()" style="background:#d69e2e; padding: 6px 14px; font-size:12px; width:100%;">确认修改密码</button> 
+        <p id="password-msg" style="font-size: 12px; margin: 6px 0 0 0; text-align:center;"></p> 
+        
+        <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 20px 0;"> 
+        
+        <!-- 自定义背景设置 --> 
+        <h4 style="margin: 0 0 6px 0;">自定义背景</h4> 
+        <p style="font-size:12px; color:var(--meta-color); margin-bottom:8px;">上传图片将自动进行尺寸与体积压缩后保存在浏览器本地</p> 
+        <input type="file" id="bg-file-input" accept="image/*" style="margin-bottom:8px;"> 
+        <div style="display: flex; gap: 8px; margin-bottom: 15px;"> 
+            <button onclick="window.saveCustomBackground()" style="padding: 6px 12px; font-size:12px; flex:1;">应用背景</button> 
+            <button onclick="window.resetCustomBackground()" style="background:#718096; padding: 6px 12px; font-size:12px; flex:1;">恢复默认</button> 
+        </div> 
+        
+        <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;"> 
+        <h4 style="margin: 0 0 10px 0;">🔔 我的消息通知</h4> 
+        <div id="notifications-list" style="max-height: 200px; overflow-y: auto;">加载中...</div> 
+        <div style="margin-top: 20px; text-align: right;"> 
+            <button onclick="window.closeProfile()" style="background-color: #718096; padding: 8px 20px;">返回论坛</button> 
+        </div> 
+    </div> 
 
-        let currentCategoryId = null;
-        let currentUserProfile = null;
-        let currentAuthUser = null;
+    <!-- 查看他人公开资料弹窗 --> 
+    <div id="user-modal" class="card hidden" style="max-width: 450px; margin: 100px auto; position: fixed; top: 15%; left: 50%; transform: translateX(-50%); z-index: 1000; box-shadow: 0 10px 25px rgba(0,0,0,0.3);"> 
+        <h3 id="modal-title" style="margin-top:0;">用户资料</h3> 
+        <div id="modal-user-content">加载中...</div> 
+        <div style="margin-top: 15px; text-align: right;"> 
+            <button onclick="window.closeUserModal()" style="background:#718096; padding: 6px 14px;">关闭</button> 
+        </div> 
+    </div> 
+</div> 
 
-        // 初始化加载本地自定义背景
-        function initCustomBackground() {
-            const savedBg = localStorage.getItem('forum_custom_bg');
-            if (savedBg) {
-                document.body.style.backgroundImage = `url("${savedBg}")`;
-            }
-        }
-        initCustomBackground();
+<script> 
+const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co'; 
+const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW'; 
+window.sbApp = window.sbApp || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); 
+const db = window.sbApp; 
+let currentCategoryId = null; 
+let currentUserProfile = null; 
+let currentAuthUser = null; 
 
-        db.auth.getSession().then(({ data: { session } }) => {
-            if (session) initUserSession(session.user);
-        });
+// 初始化加载本地自定义背景 
+function initCustomBackground() {
+    const savedBg = localStorage.getItem('forum_custom_bg'); 
+    if (savedBg) {
+        document.body.style.backgroundImage = `url("${savedBg}")`; 
+    } 
+} 
+initCustomBackground(); 
 
-        async function initUserSession(user) {
-            currentAuthUser = user;
-            const { data } = await db.from('profiles').select('*').eq('id', user.id).single();
-            currentUserProfile = data || { nickname: user.email.split('@')[0], is_admin: false, email: user.email };
-            if(!currentUserProfile.email) currentUserProfile.email = user.email;
+db.auth.getSession().then(({ data: { session } }) => {
+    if (session) initUserSession(session.user); 
+}); 
+
+async function initUserSession(user) {
+    currentAuthUser = user; 
+    const { data } = await db.from('profiles').select('*').eq('id', user.id).single(); 
+    currentUserProfile = data || { nickname: user.email.split('@')[0], is_admin: false, email: user.email }; 
+    if(!currentUserProfile.email) currentUserProfile.email = user.email; 
+    document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${currentUserProfile.nickname}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`; 
+    checkUnreadNotifications(user.id); 
+    showForum(); 
+} 
+
+async function checkUnreadNotifications(userId) {
+    const { data } = await db.from('notifications').select('*').eq('user_id', userId).eq('is_read', false); 
+    if (data && data.length > 0) {
+        document.getElementById('notification-badge').classList.remove('hidden'); 
+    } else {
+        document.getElementById('notification-badge').classList.add('hidden'); 
+    } 
+} 
+
+function showForum() {
+    document.getElementById('auth-section').classList.add('hidden'); 
+    document.getElementById('profile-section').classList.add('hidden'); 
+    document.getElementById('forum-section').classList.remove('hidden'); 
+    loadCategories(); 
+} 
+
+window.openProfile = async function() {
+    if (!currentAuthUser) return; 
+    document.getElementById('profile-email').value = currentAuthUser.email; 
+    document.getElementById('profile-role').value = currentUserProfile.is_admin ? '🛡️ 管理员 (Admin)' : '👤 普通成员 (Member)'; 
+    document.getElementById('p-nickname').value = currentUserProfile.nickname || ''; 
+    document.getElementById('p-real-name').value = currentUserProfile.real_name || ''; 
+    document.getElementById('p-phone').value = currentUserProfile.phone || ''; 
+    document.getElementById('p-gender').value = currentUserProfile.gender || ''; 
+    document.getElementById('p-age').value = currentUserProfile.age || ''; 
+    document.getElementById('p-birthday').value = currentUserProfile.birthday || ''; 
+    document.getElementById('p-constellation').value = currentUserProfile.constellation || ''; 
+    document.getElementById('p-hometown').value = currentUserProfile.hometown || ''; 
+    document.getElementById('pub-email').checked = !!currentUserProfile.public_email; 
+    document.getElementById('pub-real-name').checked = !!currentUserProfile.public_real_name; 
+    document.getElementById('pub-phone').checked = !!currentUserProfile.public_phone; 
+    document.getElementById('pub-gender').checked = currentUserProfile.public_gender !== false; 
+    document.getElementById('pub-age').checked = currentUserProfile.public_age !== false; 
+    document.getElementById('pub-birthday').checked = currentUserProfile.public_birthday !== false; 
+    document.getElementById('pub-constellation').checked = currentUserProfile.public_constellation !== false; 
+    document.getElementById('pub-hometown').checked = currentUserProfile.public_hometown !== false; 
+    loadNotifications(currentAuthUser.id); 
+    document.getElementById('forum-section').classList.add('hidden'); 
+    document.getElementById('profile-section').classList.remove('hidden'); 
+} 
+
+async function loadNotifications(userId) {
+    const container = document.getElementById('notifications-list'); 
+    const { data } = await db.from('notifications').select('*').eq('user_id', userId).order('created_at', { ascending: false }); 
+    if (!data || data.length === 0) {
+        container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">暂无任何系统通知</p>'; 
+        return; 
+    } 
+    container.innerHTML = ''; 
+    data.forEach(notif => {
+        const div = document.createElement('div'); 
+        div.className = 'card'; 
+        div.style.cssText = `padding: 10px; margin-bottom: 8px; font-size: 13px; ${notif.is_read ? '' : 'border-left: 3px solid var(--primary-color);'}`; 
+        div.innerHTML = ` 
+            <div class="flex" style="margin-bottom:4px;"> 
+                <b>${notif.title}</b> 
+                <span style="font-size:11px; color:var(--meta-color);">${new Date(notif.created_at).toLocaleString()}</span> 
+            </div> 
+            <p style="margin:0;">${notif.content}</p> 
+        `; 
+        container.appendChild(div); 
+    }); 
+    await db.from('notifications').update({ is_read: true }).eq('user_id', userId).eq('is_read', false); 
+    document.getElementById('notification-badge').classList.add('hidden'); 
+} 
+
+window.closeProfile = function() {
+    showForum(); 
+} 
+
+// 自定义背景图片压缩并保存功能
+window.saveCustomBackground = function() {
+    const fileInput = document.getElementById('bg-file-input'); 
+    if (!fileInput.files || !fileInput.files[0]) {
+        alert('请先选择一张图片文件！'); 
+        return; 
+    }
+    
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    
+    reader.onload = function(e) {
+        const img = new Image();
+        img.src = e.target.result;
+        
+        img.onload = function() {
+            let width = img.width;
+            let height = img.height;
             
-            document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${currentUserProfile.nickname}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
+            // 设置最大分辨率限制（例如最大宽度 1920，最大高度 1080）
+            const maxWidth = 1920;
+            const maxHeight = 1080;
             
-            checkUnreadNotifications(user.id);
-            showForum();
-        }
-
-        async function checkUnreadNotifications(userId) {
-            const { data } = await db.from('notifications').select('*').eq('user_id', userId).eq('is_read', false);
-            if (data && data.length > 0) {
-                document.getElementById('notification-badge').classList.remove('hidden');
-            } else {
-                document.getElementById('notification-badge').classList.add('hidden');
-            }
-        }
-
-        function showForum() {
-            document.getElementById('auth-section').classList.add('hidden');
-            document.getElementById('profile-section').classList.add('hidden');
-            document.getElementById('forum-section').classList.remove('hidden');
-            loadCategories();
-        }
-
-        window.openProfile = async function() {
-            if (!currentAuthUser) return;
-            
-            document.getElementById('profile-email').value = currentAuthUser.email;
-            document.getElementById('profile-role').value = currentUserProfile.is_admin ? '🛡️ 管理员 (Admin)' : '👤 普通成员 (Member)';
-            
-            document.getElementById('p-nickname').value = currentUserProfile.nickname || '';
-            document.getElementById('p-real-name').value = currentUserProfile.real_name || '';
-            document.getElementById('p-phone').value = currentUserProfile.phone || '';
-            document.getElementById('p-gender').value = currentUserProfile.gender || '';
-            document.getElementById('p-age').value = currentUserProfile.age || '';
-            document.getElementById('p-birthday').value = currentUserProfile.birthday || '';
-            document.getElementById('p-constellation').value = currentUserProfile.constellation || '';
-            document.getElementById('p-hometown').value = currentUserProfile.hometown || '';
-
-            document.getElementById('pub-email').checked = !!currentUserProfile.public_email;
-            document.getElementById('pub-real-name').checked = !!currentUserProfile.public_real_name;
-            document.getElementById('pub-phone').checked = !!currentUserProfile.public_phone;
-            document.getElementById('pub-gender').checked = currentUserProfile.public_gender !== false;
-            document.getElementById('pub-age').checked = currentUserProfile.public_age !== false;
-            document.getElementById('pub-birthday').checked = currentUserProfile.public_birthday !== false;
-            document.getElementById('pub-constellation').checked = currentUserProfile.public_constellation !== false;
-            document.getElementById('pub-hometown').checked = currentUserProfile.public_hometown !== false;
-            
-            loadNotifications(currentAuthUser.id);
-
-            document.getElementById('forum-section').classList.add('hidden');
-            document.getElementById('profile-section').classList.remove('hidden');
-        }
-
-        async function loadNotifications(userId) {
-            const container = document.getElementById('notifications-list');
-            const { data } = await db.from('notifications').select('*').eq('user_id', userId).order('created_at', { ascending: false });
-            
-            if (!data || data.length === 0) {
-                container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">暂无任何系统通知</p>';
-                return;
-            }
-
-            container.innerHTML = '';
-            data.forEach(notif => {
-                const div = document.createElement('div');
-                div.className = 'card';
-                div.style.cssText = `padding: 10px; margin-bottom: 8px; font-size: 13px; ${notif.is_read ? '' : 'border-left: 3px solid var(--primary-color);'}`;
-                div.innerHTML = `
-                    <div class="flex" style="margin-bottom:4px;">
-                        <b>${notif.title}</b>
-                        <span style="font-size:11px; color:var(--meta-color);">${new Date(notif.created_at).toLocaleString()}</span>
-                    </div>
-                    <p style="margin:0;">${notif.content}</p>
-                `;
-                container.appendChild(div);
-            });
-
-            await db.from('notifications').update({ is_read: true }).eq('user_id', userId).eq('is_read', false);
-            document.getElementById('notification-badge').classList.add('hidden');
-        }
-
-        window.closeProfile = function() {
-            showForum();
-        }
-
-        window.saveCustomBackground = function() {
-            const fileInput = document.getElementById('bg-file-input');
-            if (fileInput.files && fileInput.files[0]) {
-                const file = fileInput.files[0];
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const base64Image = e.target.result;
-                    localStorage.setItem('forum_custom_bg', base64Image);
-                    document.body.style.backgroundImage = `url("${base64Image}")`;
-                    alert('自定义背景应用并保存成功！');
-                };
-                reader.readAsDataURL(file);
-            } else {
-                alert('请先选择一张图片文件！');
-            }
-        };
-
-        window.resetCustomBackground = function() {
-            localStorage.removeItem('forum_custom_bg');
-            document.body.style.backgroundImage = '';
-            document.getElementById('bg-file-input').value = '';
-            alert('已成功恢复默认背景 (beijing.png)');
-        };
-
-        window.updatePassword = async function() {
-            const newPassword = document.getElementById('new-password').value;
-            const msgEl = document.getElementById('password-msg');
-
-            if (!newPassword || newPassword.length < 6) {
-                msgEl.style.color = 'red';
-                msgEl.innerText = '新密码长度不能少于 6 位字符！';
-                return;
-            }
-
-            const { error } = await db.auth.updateUser({ password: newPassword });
-            if (error) {
-                msgEl.style.color = 'red';
-                msgEl.innerText = '密码修改失败: ' + error.message;
-            } else {
-                msgEl.style.color = 'green';
-                msgEl.innerText = '密码修改成功！下次登录请使用新密码。';
-                document.getElementById('new-password').value = '';
-            }
-        };
-
-        window.updateProfile = async function() {
-            const nickname = document.getElementById('p-nickname').value.trim();
-            const msgEl = document.getElementById('profile-msg');
-            if (!nickname) return alert('昵称不能为空！');
-
-            const updateData = {
-                nickname,
-                real_name: document.getElementById('p-real-name').value.trim(),
-                phone: document.getElementById('p-phone').value.trim(),
-                gender: document.getElementById('p-gender').value.trim(),
-                age: document.getElementById('p-age').value ? parseInt(document.getElementById('p-age').value) : null,
-                birthday: document.getElementById('p-birthday').value.trim(),
-                constellation: document.getElementById('p-constellation').value.trim(),
-                hometown: document.getElementById('p-hometown').value.trim(),
-
-                public_email: document.getElementById('pub-email').checked,
-                public_real_name: document.getElementById('pub-real-name').checked,
-                public_phone: document.getElementById('pub-phone').checked,
-                public_gender: document.getElementById('pub-gender').checked,
-                public_age: document.getElementById('pub-age').checked,
-                public_birthday: document.getElementById('pub-birthday').checked,
-                public_constellation: document.getElementById('pub-constellation').checked,
-                public_hometown: document.getElementById('pub-hometown').checked
-            };
-
-            const { error } = await db.from('profiles').update(updateData).eq('id', currentAuthUser.id);
-
-            if (error) {
-                msgEl.style.color = 'red';
-                msgEl.innerText = '更新失败: ' + error.message;
-            } else {
-                msgEl.style.color = 'green';
-                msgEl.innerText = '个人资料保存成功！';
-                currentUserProfile = { ...currentUserProfile, ...updateData };
-                document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${nickname}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
-            }
-        }
-
-        window.viewUserProfile = async function(userId) {
-            const modal = document.getElementById('user-modal');
-            const content = document.getElementById('modal-user-content');
-            const modalTitle = document.getElementById('modal-title');
-            content.innerHTML = '加载中...';
-            modal.classList.remove('hidden');
-
-            const { data, error } = await db.from('profiles').select('*').eq('id', userId).single();
-            if (error || !data) {
-                content.innerHTML = '<p style="color:red; font-size:13px;">未找到该用户资料或已被注销</p>';
-                return;
-            }
-
-            const isAdmin = currentUserProfile && currentUserProfile.is_admin;
-            modalTitle.innerText = isAdmin ? '🛡️ 管理员后台：用户详细档案' : '用户公开资料';
-
-            let html = `<p style="font-size:13px; margin: 5px 0;"><b>昵称：</b> ${data.nickname}</p>`;
-            html += `<p style="font-size:13px; margin: 5px 0;"><b>身份：</b> ${data.is_admin ? '🛡️ 管理员' : '👤 普通成员'}</p>`;
-            
-            if (isAdmin) {
-                html += `<hr style="border:0; border-top:1px dashed var(--border-color); margin: 8px 0;">`;
-                html += `<p style="font-size:12px; color:var(--admin-badge); margin: 3px 0;"><b>[管理员特权视图 - 忽略隐私设置]</b></p>`;
-                html += `<p style="font-size:13px; margin: 5px 0;"><b>真实姓名：</b> ${data.real_name || '未填写'}</p>`;
-                html += `<p style="font-size:13px; margin: 5px 0;"><b>手机号：</b> ${data.phone || '未填写'}</p>`;
-                html += `<p style="font-size:13px; margin: 5px 0;"><b>性别：</b> ${data.gender || '未填写'}</p>`;
-                html += `<p style="font-size:13px; margin: 5px 0;"><b>年龄：</b> ${data.age || '未填写'}</p>`;
-                html += `<p style="font-size:13px; margin: 5px 0;"><b>生日：</b> ${data.birthday || '未填写'}</p>`;
-                html += `<p style="font-size:13px; margin: 5px 0;"><b>星座：</b> ${data.constellation || '未填写'}</p>`;
-                html += `<p style="font-size:13px; margin: 5px 0;"><b>故乡：</b> ${data.hometown || '未填写'}</p>`;
-                html += `<p style="font-size:13px; margin: 5px 0; color:var(--meta-color);"><b>注册邮箱：</b> ${data.email || currentAuthUser?.email || '保密'}</p>`;
-            } else {
-                if (data.public_real_name && data.real_name) html += `<p style="font-size:13px; margin: 5px 0;"><b>真实姓名：</b> ${data.real_name}</p>`;
-                if (data.public_phone && data.phone) html += `<p style="font-size:13px; margin: 5px 0;"><b>手机号：</b> ${data.phone}</p>`;
-                if (data.public_gender !== false && data.gender) html += `<p style="font-size:13px; margin: 5px 0;"><b>性别：</b> ${data.gender}</p>`;
-                if (data.public_age !== false && data.age) html += `<p style="font-size:13px; margin: 5px 0;"><b>年龄：</b> ${data.age}</p>`;
-                if (data.public_birthday !== false && data.birthday) html += `<p style="font-size:13px; margin: 5px 0;"><b>生日：</b> ${data.birthday}</p>`;
-                if (data.public_constellation !== false && data.constellation) html += `<p style="font-size:13px; margin: 5px 0;"><b>星座：</b> ${data.constellation}</p>`;
-                if (data.public_hometown !== false && data.hometown) html += `<p style="font-size:13px; margin: 5px 0;"><b>故乡：</b> ${data.hometown}</p>`;
-                
-                const rawEmail = data.email || (userId === currentAuthUser?.id ? currentAuthUser.email : '');
-                if (rawEmail) {
-                    const displayEmail = data.public_email ? rawEmail : rawEmail.replace(/(.{2}).*(@.*)/, '$1***$2');
-                    html += `<p style="font-size:13px; margin: 5px 0;"><b>注册邮箱：</b> ${displayEmail}</p>`;
+            if (width > maxWidth || height > maxHeight) {
+                if (width / height > maxWidth / maxHeight) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                } else {
+                    width = Math.round((width * maxHeight) / height);
+                    height = maxHeight;
                 }
             }
+            
+            // 利用 Canvas 进行重绘以实现自适应压缩
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // 转换为 JPEG 格式并进行压缩质量控制（0.85 质量）
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            
+            localStorage.setItem('forum_custom_bg', compressedDataUrl); 
+            document.body.style.backgroundImage = `url("${compressedDataUrl}")`; 
+            alert('自定义背景已完成压缩、应用并保存成功！'); 
+        };
+        
+        img.onerror = function() {
+            alert('图片加载失败，请换一张图片尝试！');
+        };
+    };
+    
+    reader.readAsDataURL(file);
+}; 
 
-            content.innerHTML = html;
-        }
+window.resetCustomBackground = function() {
+    localStorage.removeItem('forum_custom_bg'); 
+    document.body.style.backgroundImage = ''; 
+    document.getElementById('bg-file-input').value = ''; 
+    alert('已成功恢复默认背景 (beijing.png)'); 
+}; 
 
-        window.closeUserModal = function() {
-            document.getElementById('user-modal').classList.add('hidden');
-        }
+window.updatePassword = async function() {
+    const newPassword = document.getElementById('new-password').value; 
+    const msgEl = document.getElementById('password-msg'); 
+    if (!newPassword || newPassword.length < 6) {
+        msgEl.style.color = 'red'; 
+        msgEl.innerText = '新密码长度不能少于 6 位字符！'; 
+        return; 
+    } 
+    const { error } = await db.auth.updateUser({ password: newPassword }); 
+    if (error) {
+        msgEl.style.color = 'red'; 
+        msgEl.innerText = '密码修改失败: ' + error.message; 
+    } else {
+        msgEl.style.color = 'green'; 
+        msgEl.innerText = '密码修改成功！下次登录请使用新密码。'; 
+        document.getElementById('new-password').value = ''; 
+    } 
+}; 
 
+window.updateProfile = async function() {
+    const nickname = document.getElementById('p-nickname').value.trim(); 
+    const msgEl = document.getElementById('profile-msg'); 
+    if (!nickname) return alert('昵称不能为空！'); 
+    
+    const updateData = {
+        nickname, 
+        real_name: document.getElementById('p-real-name').value.trim(), 
+        phone: document.getElementById('p-phone').value.trim(), 
+        gender: document.getElementById('p-gender').value.trim(), 
+        age: document.getElementById('p-age').value ? parseInt(document.getElementById('p-age').value) : null, 
+        birthday: document.getElementById('p-birthday').value.trim(), 
+        constellation: document.getElementById('p-constellation').value.trim(), 
+        hometown: document.getElementById('p-hometown').value.trim(), 
+        public_email: document.getElementById('pub-email').checked, 
+        public_real_name: document.getElementById('pub-real-name').checked, 
+        public_phone: document.getElementById('pub-phone').checked, 
+        public_gender: document.getElementById('pub-gender').checked, 
+        public_age: document.getElementById('pub-age').checked, 
+        public_birthday: document.getElementById('pub-birthday').checked, 
+        public_constellation: document.getElementById('pub-constellation').checked, 
+        public_hometown: document.getElementById('pub-hometown').checked 
+    }; 
+    
+    const { error } = await db.from('profiles').update(updateData).eq('id', currentAuthUser.id); 
+    if (error) {
+        msgEl.style.color = 'red'; 
+        msgEl.innerText = '更新失败: ' + error.message; 
+    } else {
+        msgEl.style.color = 'green'; 
+        msgEl.innerText = '个人资料保存成功！'; 
+        currentUserProfile = { ...currentUserProfile, ...updateData }; 
+        document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${nickname}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`; 
+    } 
+}; 
+
+window.viewUserProfile = async function(userId) {
+    const modal = document.getElementById('user-modal'); 
+    const content = document.getElementById('modal-user-content'); 
+    const modalTitle = document.getElementById('modal-title'); 
+    content.innerHTML = '加载中...'; 
+    modal.classList.remove('hidden'); 
+    
+    const { data, error } = await db.from('profiles').select('*').eq('id', userId).single(); 
+    if (error || !data) {
+        content.innerHTML = '<p style="color:red; font-size:13px;">未找到该用户资料或已被注销</p>'; 
+        return; 
+    } 
+    
+    const isAdmin = currentUserProfile && currentUserProfile.is_admin; 
+    modalTitle.innerText = isAdmin ? '🛡️ 管理员后台：用户详细档案' : '用户公开资料'; 
+    let html = `<p style="font-size:13px; margin: 5px 0;"><b>昵称：</b> ${data.nickname}</p>`; 
+    html += `<p style="font-size:13px; margin: 5px 0;"><b>身份：</b> ${data.is_admin ? '🛡️ 管理员' : '👤 普通成员'}</p>`; 
+    
+    if (isAdmin) {
+        html += `<hr style="border:0; border-top:1px dashed var(--border-color); margin: 8px 0;">`; 
+        html += `<p style="font-size:12px; color:var(--admin-badge); margin: 3px 0;"><b>[管理员特权视图 - 忽略隐私设置]</b></p>`; 
+        html += `<p style="font-size:13px; margin: 5px 0;"><b>真实姓名：</b> ${data.real_name || '未填写'}</p>`; 
+        html += `<p style="font-size:13px; margin: 5px 0;"><b>手机号：</b> ${data.phone || '未填写'}</p>`; 
+        html += `<p style="font-size:13px; margin: 5px 0;"><b>性别：</b> ${data.gender || '未填写'}</p>`; 
+        html += `<p style="font-size:13px; margin: 5px 0;"><b>年龄：</b> ${data.age || '未填写'}</p>`; 
+        html += `<p style="font-size:13px; margin: 5px 0;"><b>生日：</b> ${data.birthday || '未填写'}</p>`; 
+        html += `<p style="font-size:13px; margin: 5px 0;"><b>星座：</b> ${data.constellation || '未填写'}</p>`; 
+        html += `<p style="font-size:13px; margin: 5px 0;"><b>故乡：</b> ${data.hometown || '未填写'}</p>`; 
+        html += `<p style="font-size:13px; margin: 5px 0; color:var(--meta-color);"><b>注册邮箱：</b> ${data.email || currentAuthUser?.email || '保密'}</p>`; 
+    } else {
+        if (data.public_real_name && data.real_name) html += `<p style="font-size:13px; margin: 5px 0;"><b>真实姓名：</b> ${data.real_name}</p>`; 
+        if (data.public_phone && data.phone) html += `<p style="font-size:13px; margin: 5px 0;"><b>手机号：</b> ${data.phone}</p>`; 
+        if (data.public_gender !== false && data.gender) html += `<p style="font-size:13px; margin: 5px 0;"><b>性别：</b> ${data.gender}</p>`; 
+        if (data.public_age !== false && data.age) html += `<p style="font-size:13px; margin: 5px 0;"><b>年龄：</b> ${data.age}</p>`; 
+        if (data.public_birthday !== false && data.birthday) html += `<p style="font-size:13px; margin: 5px 0;"><b>生日：</b> ${data.birthday}</p>`; 
+        if (data.public_constellation !== false && data.constellation) html += `<p style="font-size:13px; margin: 5px 0;"><b>星座：</b> ${data.constellation}</p>`; 
+        if (data.public_hometown !== false && data.hometown) html += `<p style="font-size:13px; margin: 5px 0;"><b>故乡：</b> ${data.hometown}</p>`; 
+        const rawEmail = data.email || (userId === currentAuthUser?.id ? currentAuthUser.email : ''); 
+        if (rawEmail) {
+            const displayEmail = data.public_email ? rawEmail : rawEmail.replace(/(.{2}).*(@.*)/, '$1***$2'); 
+            html += `<p style="font-size:13px; margin: 5px 0;"><b>注册邮箱：</b> ${displayEmail}</p>`; 
+        } 
+    } 
+    content.innerHTML = html; 
+} 
+
+window.closeUserModal = function() {
+    document.getElementById('user-modal').classList.add('hidden'); 
+} 
         window.handleLogin = async function() {
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
