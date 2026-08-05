@@ -118,7 +118,7 @@
 </div>
 
 <script>
-    // 1. 初始化主题与自定义背景（参考 feedback.html 的实现逻辑）
+    // 1. 初始化主题与自定义背景
     function initThemeAndBg() {
         const savedTheme = localStorage.getItem('forum_theme');
         if (savedTheme === 'dark') {
@@ -138,7 +138,6 @@
     }
     initThemeAndBg();
 
-    // 监听 localStorage 跨页面实时同步事件
     window.addEventListener('storage', (event) => {
         if (event.key === 'forum_theme') {
             if (event.newValue === 'dark') {
@@ -155,45 +154,32 @@
         }
     });
 
-    // 2. Supabase 配置与在线状态逻辑
+    // 2. Supabase 配置与实时在线逻辑
     const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
     const sbApp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    let currentUser = null;
-
     async function initSpace() {
-        const { data: { session } } = await sbApp.auth.getSession();
-        if (!session) {
+        const { data: { session }, error: sessionError } = await sbApp.auth.getSession();
+        if (sessionError || !session) {
             alert('请先登录论坛！');
             window.location.href = 'index.html';
             return;
         }
-        currentUser = session.user;
-
-        const room = sbApp.channel('online-users');
-        
-        room.subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                await room.track({
-                    user_id: currentUser.id,
-                    online_at: new Date().toISOString(),
-                });
-            }
-        });
-
-        loadAllProfilesAndPresence(room);
-    }
-
-    async function loadAllProfilesAndPresence(room) {
+        const currentUser = session.user;
         const container = document.getElementById('users-container');
 
+        // 先获取所有 profiles 数据
         const { data: profiles, error } = await sbApp.from('profiles').select('*');
         if (error) {
             container.innerHTML = `<p style="color:red;">加载用户失败: ${error.message}</p>`;
             return;
         }
 
+        // 创建频道
+        const room = sbApp.channel('online-users');
+
+        // 渲染函数
         const renderUsers = () => {
             const presenceState = room.presenceState();
             const onlineUserIds = new Set();
@@ -202,6 +188,11 @@
             });
 
             container.innerHTML = '';
+            if (!profiles || profiles.length === 0) {
+                container.innerHTML = `<p style="color:var(--meta-color);">暂无用户档案记录</p>`;
+                return;
+            }
+
             profiles.forEach(user => {
                 const isOnline = onlineUserIds.has(user.id) || (user.id === currentUser?.id);
                 const card = document.createElement('div');
@@ -225,11 +216,21 @@
             });
         };
 
+        // 必须在 subscribe() 之前绑定 on 事件
         room.on('presence', { event: 'sync' }, renderUsers);
         room.on('presence', { event: 'join' }, renderUsers);
         room.on('presence', { event: 'leave' }, renderUsers);
 
-        renderUsers();
+        // 最后再 subscribe 并 track 自身状态
+        room.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await room.track({
+                    user_id: currentUser.id,
+                    online_at: new Date().toISOString(),
+                });
+                renderUsers();
+            }
+        });
     }
 
     initSpace();
