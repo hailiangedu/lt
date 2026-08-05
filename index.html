@@ -776,68 +776,99 @@ async function loadTopics(categoryId) {
     }
 }
 
-// 1. 切换点赞状态
+// 切换点赞状态
 window.toggleLike = async function(topicId) {
     if (!currentAuthUser) {
-        alert('请先登录后再操作！');
+        alert('请先登录后再点赞！');
         return;
     }
 
-    // 检查当前用户是否已经点赞
-    const { data: existing } = await db
-        .from('likes')
-        .select('id')
-        .eq('topic_id', topicId)
-        .eq('user_id', currentAuthUser.id)
-        .maybeSingle();
+    try {
+        // 1. 检查当前用户是否已经点赞过该帖子
+        const { data: existing, error: selectErr } = await db
+            .from('likes')
+            .select('id')
+            .eq('topic_id', topicId)
+            .eq('user_id', currentAuthUser.id)
+            .maybeSingle();
 
-    if (existing) {
-        // 已点赞 -> 取消点赞（删除记录）
-        const { error } = await db.from('likes').delete().eq('id', existing.id);
-        if (!error) {
-            // 触发你原有的重新加载/刷新板块列表函数，例如 loadTopics() 或 loadCategories()
-            if (typeof loadTopics === 'function') loadTopics();
-            else if (typeof loadCategories === 'function') loadCategories();
+        if (selectErr) {
+            console.error('查询点赞状态失败:', selectErr);
+            return;
         }
-    } else {
-        // 未点赞 -> 添加点赞记录
-        const { error } = await db.from('likes').insert({ topic_id: topicId, user_id: currentAuthUser.id });
-        if (!error) {
-            if (typeof loadTopics === 'function') loadTopics();
-            else if (typeof loadCategories === 'function') loadCategories();
+
+        if (existing) {
+            // 已点赞 -> 取消点赞（删除记录）
+            const { error: deleteErr } = await db.from('likes').delete().eq('id', existing.id);
+            if (deleteErr) {
+                alert('取消点赞失败: ' + deleteErr.message);
+                return;
+            }
+        } else {
+            // 未点赞 -> 添加点赞记录
+            const { error: insertErr } = await db.from('likes').insert({ topic_id: topicId, user_id: currentAuthUser.id });
+            if (insertErr) {
+                alert('点赞失败: ' + insertErr.message + ' (请确认是否已在Supabase中创建 likes 表)');
+                return;
+            }
         }
+
+        // 2. 操作成功后，刷新当前选中的板块或话题列表
+        if (typeof currentCategoryId !== 'undefined' && currentCategoryId) {
+            window.loadTopicsForCategory(currentCategoryId);
+        } else if (typeof loadCategories === 'function') {
+            loadCategories();
+        }
+    } catch (e) {
+        console.error('点赞操作异常:', e);
     }
 };
 
-// 2. 切换收藏状态
+// 切换收藏状态
 window.toggleFavorite = async function(topicId) {
     if (!currentAuthUser) {
-        alert('请先登录后再操作！');
+        alert('请先登录后再收藏！');
         return;
     }
 
-    // 检查当前用户是否已经收藏
-    const { data: existing } = await db
-        .from('favorites')
-        .select('id')
-        .eq('topic_id', topicId)
-        .eq('user_id', currentAuthUser.id)
-        .maybeSingle();
+    try {
+        // 1. 检查当前用户是否已经收藏过该帖子
+        const { data: existing, error: selectErr } = await db
+            .from('favorites')
+            .select('id')
+            .eq('topic_id', topicId)
+            .eq('user_id', currentAuthUser.id)
+            .maybeSingle();
 
-    if (existing) {
-        // 已收藏 -> 取消收藏
-        const { error } = await db.from('favorites').delete().eq('id', existing.id);
-        if (!error) {
-            if (typeof loadTopics === 'function') loadTopics();
-            else if (typeof loadCategories === 'function') loadCategories();
+        if (selectErr) {
+            console.error('查询收藏状态失败:', selectErr);
+            return;
         }
-    } else {
-        // 未收藏 -> 添加收藏
-        const { error } = await db.from('favorites').insert({ topic_id: topicId, user_id: currentAuthUser.id });
-        if (!error) {
-            if (typeof loadTopics === 'function') loadTopics();
-            else if (typeof loadCategories === 'function') loadCategories();
+
+        if (existing) {
+            // 已收藏 -> 取消收藏
+            const { error: deleteErr } = await db.from('favorites').delete().eq('id', existing.id);
+            if (deleteErr) {
+                alert('取消收藏失败: ' + deleteErr.message);
+                return;
+            }
+        } else {
+            // 未收藏 -> 添加收藏
+            const { error: insertErr } = await db.from('favorites').insert({ topic_id: topicId, user_id: currentAuthUser.id });
+            if (insertErr) {
+                alert('收藏失败: ' + insertErr.message + ' (请确认是否已在Supabase中创建 favorites 表)');
+                return;
+            }
         }
+
+        // 2. 操作成功后，刷新列表
+        if (typeof currentCategoryId !== 'undefined' && currentCategoryId) {
+            window.loadTopicsForCategory(currentCategoryId);
+        } else if (typeof loadCategories === 'function') {
+            loadCategories();
+        }
+    } catch (e) {
+        console.error('收藏操作异常:', e);
     }
 };
    
@@ -914,7 +945,7 @@ window.warnUser = async function(userId, topicId) {
 
     await db.from('notifications').insert({
         user_id: userId,
-        title: '⚠️ 违规警告与发帖限流通知',
+        title: '⚠️ 违规警告通知',
         content: `您在论坛发布的内容由于违规已被管理员处理。原因：${reason}`,
         is_read: false
     });
