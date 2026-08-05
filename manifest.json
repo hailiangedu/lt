@@ -4,7 +4,7 @@
   "start_url": "./index.html",
   "display": "fullscreen",
   "background_color": "#f4f6f8",
-  "theme_color": "#39c5bb",
+  "theme_color": "#66ccff",
   "icons": [
     {
       "src": "./image.png",
@@ -12,4 +12,13 @@
       "type": "image/png"
     }
   ]
+  "edge_side_panel": {"preferred_width": 400}
+  "shortcuts": [
+    {
+    "name": "查看用户列表",
+    "short_name": "查看用户",
+    "url": "./space.html"]
+    }
+  ]
+
 }
