@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>互动空间 - 海高论坛</title>
+    <title>互动空间</title>
     <!-- 引入 Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -66,26 +66,40 @@
         button:hover { opacity: 0.9; }
         .user-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-            gap: 15px;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 12px;
             margin-top: 15px;
         }
+        /* 优化后的卡片：紧凑横向排版，大幅节省垂直空间 */
         .user-card {
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
             border-radius: 8px;
-            padding: 15px;
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .user-info {
             display: flex;
             flex-direction: column;
+            gap: 3px;
+            overflow: hidden;
+        }
+        .user-meta {
+            display: flex;
+            align-items: center;
             gap: 8px;
-            position: relative;
+            font-size: 12px;
+            color: var(--meta-color);
         }
         .status-dot {
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
             display: inline-block;
-            margin-right: 5px;
+            flex-shrink: 0;
         }
         .status-dot.online { background-color: var(--online-color); box-shadow: 0 0 4px var(--online-color); }
         .status-dot.offline { background-color: var(--offline-color); }
@@ -93,7 +107,7 @@
             background-color: var(--admin-badge);
             color: white;
             font-size: 10px;
-            padding: 2px 6px;
+            padding: 1px 5px;
             border-radius: 4px;
         }
     </style>
@@ -104,7 +118,7 @@
     <!-- 顶部导航栏 -->
     <div class="card flex">
         <div>
-            <h2 style="margin:0;">海高论坛 - 互动空间</h2>
+            <h2 style="margin:0;">互动空间</h2>
             <span style="font-size: 12px; color: var(--meta-color);">实时查看所有注册用户及其在线状态</span>
         </div>
         <button onclick="window.location.href='index.html'" style="background:#4a5568;">返回论坛主页</button>
@@ -198,14 +212,16 @@
                 const card = document.createElement('div');
                 card.className = 'user-card';
                 card.innerHTML = `
-                    <div class="flex" style="align-items: flex-start;">
-                        <b>${user.nickname || '未命名用户'}</b>
-                        ${user.is_admin ? '<span class="badge-admin">管理员</span>' : ''}
+                    <div class="user-info">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <b style="font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${user.nickname || '未命名用户'}</b>
+                            ${user.is_admin ? '<span class="badge-admin">管理员</span>' : ''}
+                        </div>
+                        <div class="user-meta">
+                            <span>年级：${user.grade || '未填'}</span>
+                        </div>
                     </div>
-                    <div style="font-size: 12px; color: var(--meta-color);">
-                        年级：${user.grade || '未填'}
-                    </div>
-                    <div style="font-size: 12px; display: flex; align-items: center; margin-top: auto;">
+                    <div style="font-size: 12px; display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
                         <span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>
                         <span style="color: ${isOnline ? 'var(--online-color)' : 'var(--meta-color)'}; font-weight: 500;">
                             ${isOnline ? '在线' : '离线'}
