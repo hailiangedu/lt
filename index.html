@@ -777,69 +777,66 @@ async function loadTopics(categoryId) {
 }
 
 // 点赞处理函数
-window.handleLike = async function(postId) {
-    try {
-        const user = supabase.auth.getUser();
-        if (!user) {
-            alert("请先登录");
-            return;
-        }
+window.handleLike = async function(postId, btnElement) {
+    const user = (await db.auth.getUser()).data.user;
+    if (!user) {
+        alert("请先登录");
+        return;
+    }
 
-        // 1. 获取当前点赞按钮和计数 DOM 元素
-        const btn = event.currentTarget.querySelector('span:first-child');
-        const countSpan = document.getElementById(`like-count-${postId}`);
-        let currentCount = parseInt(countSpan.textContent) || 0;
-        const isCurrentlyLiked = btn.classList.contains('liked');
+    const iconSpan = btnElement.querySelector('.like-icon');
+    const countSpan = btnElement.querySelector('.like-count');
+    let currentCount = parseInt(countSpan.textContent) || 0;
+    const isCurrentlyLiked = btnElement.classList.contains('liked');
 
-        // 2. 切换前端 UI 状态（实现即时反馈）
-        if (isCurrentlyLiked) {
-            btn.classList.remove('liked');
-            countSpan.textContent = Math.max(0, currentCount - 1);
-        } else {
-            btn.classList.add('liked');
-            countSpan.textContent = currentCount + 1;
-        }
+    // 1. 立即更新前端 UI 状态
+    if (isCurrentlyLiked) {
+        btnElement.classList.remove('liked');
+        btnElement.style.color = 'var(--meta-color)';
+        iconSpan.textContent = '♡';
+        countSpan.textContent = Math.max(0, currentCount - 1);
+    } else {
+        btnElement.classList.add('liked');
+        btnElement.style.color = '#e53e3e';
+        iconSpan.textContent = '❤️';
+        countSpan.textContent = currentCount + 1;
+    }
 
-        // 3. 同步写入后端数据库（此处根据您的 Supabase 实际表名调整）
-        // 示例逻辑：若已点赞则删除记录，未点赞则插入记录
-        if (isCurrentlyLiked) {
-            await supabase.from('likes').delete().match({ post_id: postId, user_id: (await supabase.auth.getUser()).data.user.id });
-        } else {
-            await supabase.from('likes').insert({ post_id: postId, user_id: (await supabase.auth.getUser()).data.user.id });
-        }
-    } catch (error) {
-        console.error("点赞操作失败:", error);
+    // 2. 真实写入数据库
+    if (isCurrentlyLiked) {
+        await db.from('likes').delete().match({ post_id: postId, user_id: user.id });
+    } else {
+        await db.from('likes').insert({ post_id: postId, user_id: user.id });
     }
 };
 
 // 收藏处理函数
-window.handleFavorite = async function(postId) {
-    try {
-        const user = supabase.auth.getUser();
-        if (!user) {
-            alert("请先登录");
-            return;
-        }
+window.handleFavorite = async function(postId, btnElement) {
+    const user = (await db.auth.getUser()).data.user;
+    if (!user) {
+        alert("请先登录");
+        return;
+    }
 
-        // 1. 获取收藏图标 DOM 元素
-        const btn = event.currentTarget.querySelector('span:first-child');
-        const isCurrentlyFavorited = btn.classList.contains('favorited');
+    const iconSpan = btnElement.querySelector('.fav-icon');
+    const isCurrentlyFavorited = btnElement.classList.contains('favorited');
 
-        // 2. 切换前端 UI 状态
-        if (isCurrentlyFavorited) {
-            btn.classList.remove('favorited');
-        } else {
-            btn.classList.add('favorited');
-        }
+    // 1. 立即更新前端 UI 状态
+    if (isCurrentlyFavorited) {
+        btnElement.classList.remove('favorited');
+        btnElement.style.color = 'var(--meta-color)';
+        iconSpan.textContent = '☆';
+    } else {
+        btnElement.classList.add('favorited');
+        btnElement.style.color = '#d69e2e';
+        iconSpan.textContent = '⭐';
+    }
 
-        // 3. 同步写入后端数据库
-        if (isCurrentlyFavorited) {
-            await supabase.from('favorites').delete().match({ post_id: postId, user_id: (await supabase.auth.getUser()).data.user.id });
-        } else {
-            await supabase.from('favorites').insert({ post_id: postId, user_id: (await supabase.auth.getUser()).data.user.id });
-        }
-    } catch (error) {
-        console.error("收藏操作失败:", error);
+    // 2. 真实写入数据库
+    if (isCurrentlyFavorited) {
+        await db.from('favorites').delete().match({ post_id: postId, user_id: user.id });
+    } else {
+        await db.from('favorites').insert({ post_id: postId, user_id: user.id });
     }
 };
    
