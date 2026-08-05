@@ -756,14 +756,14 @@ async function loadTopics(categoryId) {
                 </span>
 
                 <div style="display:flex; gap:10px; align-items:center;">
-                    <button class="action-btn ${topic.isLiked ? 'liked' : ''}" onclick="window.toggleLike('${topic.id}')" style="background:none; border:none; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:2px; color: ${topic.isLiked ? '#e53e3e' : 'var(--meta-color)'};">
-                        <span>${topic.isLiked ? '❤️' : '♡'}</span>
-                        <span>${topic.likeCount || 0}</span>
+                    <button class="action-btn ${topic.isLiked ? 'liked' : ''}" onclick="window.handleLike('${topic.id}', this)" style="background:none; border:none; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:2px; color:${topic.isLiked ? '#e53e3e' : 'var(--meta-color)'};">
+                        <span class="like-icon">${topic.isLiked ? '❤️' : '♡'}</span> 
+                        <span class="like-count">${topic.likeCount || 0}</span>
                     </button>
-                    <button class="action-btn ${topic.isFavorited ? 'favorited' : ''}" onclick="window.toggleFavorite('${topic.id}')" style="background:none; border:none; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:2px; color: ${topic.isFavorited ? '#d69e2e' : 'var(--meta-color)'};">
-                        <span>${topic.isFavorited ? '⭐' : '☆'}</span>
+                    <button class="action-btn ${topic.isFavorited ? 'favorited' : ''}" onclick="window.handleFavorite('${topic.id}', this)" style="background:none; border:none; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:2px; color:${topic.isFavorited ? '#d69e2e' : 'var(--meta-color)'};">
+                        <span class="fav-icon">${topic.isFavorited ? '⭐' : '☆'}</span> 
                     </button>
-                </div>    
+                </div>  
             </div>
             ${ownerActions}
             ${commentsHtml}
