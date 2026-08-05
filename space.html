@@ -10,31 +10,48 @@
         :root {
             --bg-color: #f4f6f8;
             --text-color: #2d3748;
-            --card-bg: rgba(255, 255, 255, 0.92);
-            --border-color: #e2e8f0;
-            --primary-color: #66ccff;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --border-color: rgba(226, 232, 240, 0.6);
+            --primary-color: #3182ce;
             --meta-color: #718096;
             --hover-bg: #ebf8ff;
             --admin-badge: #e53e3e;
             --online-color: #48bb78;
             --offline-color: #a0aec0;
         }
+        [data-theme="dark"] {
+            --bg-color: #1a202c;
+            --text-color: #f7fafc;
+            --card-bg: rgba(45, 55, 72, 0.85);
+            --border-color: rgba(74, 85, 104, 0.6);
+            --primary-color: #63b3ed;
+            --meta-color: #a0aec0;
+            --hover-bg: #2c5282;
+        }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg-color);
+            background-image: url('beijing.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
             color: var(--text-color);
             margin: 0;
             padding: 20px;
             box-sizing: border-box;
+            min-height: 100vh;
         }
         .container { max-width: 950px; margin: 0 auto; }
         .card {
-            background: var(--card-bg);
+            background-color: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
+            border-radius: 12px;
             padding: 20px;
             margin-bottom: 15px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
         }
         .flex { display: flex; justify-content: space-between; align-items: center; }
         button {
@@ -54,9 +71,9 @@
             margin-top: 15px;
         }
         .user-card {
-            background: var(--card-bg);
+            background-color: var(--card-bg);
             border: 1px solid var(--border-color);
-            border-radius: 6px;
+            border-radius: 8px;
             padding: 15px;
             display: flex;
             flex-direction: column;
@@ -101,9 +118,47 @@
 </div>
 
 <script>
+    // 1. 初始化主题与自定义背景（参考 feedback.html 的实现逻辑）
+    function initThemeAndBg() {
+        const savedTheme = localStorage.getItem('forum_theme');
+        if (savedTheme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        } else if (savedTheme === 'light') {
+            document.documentElement.removeAttribute('data-theme');
+        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+
+        const customBg = localStorage.getItem('forum_custom_bg') || localStorage.getItem('custom_bg') || localStorage.getItem('customBg') || localStorage.getItem('bg_image');
+        if (customBg) {
+            document.body.style.backgroundImage = `url("${customBg}")`;
+        } else {
+            document.body.style.backgroundImage = "url('beijing.png')";
+        }
+    }
+    initThemeAndBg();
+
+    // 监听 localStorage 跨页面实时同步事件
+    window.addEventListener('storage', (event) => {
+        if (event.key === 'forum_theme') {
+            if (event.newValue === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+            }
+        } else if (['forum_custom_bg', 'custom_bg', 'customBg', 'bg_image'].includes(event.key)) {
+            if (event.newValue) {
+                document.body.style.backgroundImage = `url("${event.newValue}")`;
+            } else {
+                document.body.style.backgroundImage = "url('beijing.png')";
+            }
+        }
+    });
+
+    // 2. Supabase 配置与在线状态逻辑
     const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
-    const sbApp = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const sbApp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let currentUser = null;
 
@@ -116,7 +171,6 @@
         }
         currentUser = session.user;
 
-        // 1. 初始化当前用户的在线状态追踪 (使用 Supabase Realtime Presence)
         const room = sbApp.channel('online-users');
         
         room.subscribe(async (status) => {
@@ -128,24 +182,20 @@
             }
         });
 
-        // 2. 加载所有用户档案并监听在线状态变化
         loadAllProfilesAndPresence(room);
     }
 
     async function loadAllProfilesAndPresence(room) {
         const container = document.getElementById('users-container');
 
-        // 从 profiles 表获取所有注册用户基本信息
         const { data: profiles, error } = await sbApp.from('profiles').select('*');
         if (error) {
             container.innerHTML = `<p style="color:red;">加载用户失败: ${error.message}</p>`;
             return;
         }
 
-        // 渲染函数：结合 Presence 状态刷新UI
         const renderUsers = () => {
             const presenceState = room.presenceState();
-            // 提取所有当前在线的 user_id 集合
             const onlineUserIds = new Set();
             Object.values(presenceState).forEach(presences => {
                 presences.forEach(p => onlineUserIds.add(p.user_id));
@@ -175,12 +225,10 @@
             });
         };
 
-        // 监听在线状态同步与加入/离开事件
         room.on('presence', { event: 'sync' }, renderUsers);
         room.on('presence', { event: 'join' }, renderUsers);
         room.on('presence', { event: 'leave' }, renderUsers);
 
-        // 首次渲染
         renderUsers();
     }
 
