@@ -2,9 +2,9 @@
   "name": "海高论坛",
   "short_name": "海高论坛",
   "start_url": "./index.html",
-  "display": "standalone",
+  "display": "fullscreen",
   "background_color": "#f4f6f8",
-  "theme_color": "#66ccff",
+  "theme_color": "#39c5bb",
   "icons": [
     {
       "src": "./image.png",
