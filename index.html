@@ -69,7 +69,14 @@ button:hover { opacity: 0.9; }
 .clickable-name { color: var(--primary-color); cursor: pointer; text-decoration: underline; } 
 .profile-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; } 
 .profile-row label { width: 80px; font-size: 12px; color: var(--meta-color); flex-shrink: 0; } 
-
+/* 点赞与收藏操作栏样式 */
+.post-actions {display: flex; gap: 15px; margin-top: 10px; font-size: 14px; }
+.action-btn { background: none; border: none; cursor: pointer; display: flex; align-items: center; gap: 4px; color: var(--meta-color); padding: 4px 8px; border-radius: 4px; transition: background 0.2s; }
+.action-btn:hover { background-color: var(--hover-bg); }
+/* 点赞激活（红色心形） */
+.action-btn.liked { color: #e53e3e; }
+/* 收藏激活（金色星形） */
+.action-btn.favorited { color: #d69e2e; }
 /* 移动端屏幕（<=768px）：字体与间距缩小，PC端保持绝对不变 */ 
 @media (max-width: 768px) {
     body { font-size: 12px; padding: 6px; } 
@@ -747,6 +754,16 @@ async function loadTopics(categoryId) {
                 <span style="font-size:11px; color:var(--meta-color);">
                     发布者：<b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${authorName}</b>${badge} &nbsp;|&nbsp; 发布于 ${new Date(topic.created_at).toLocaleString()}
                 </span>
+
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <button class="action-btn ${topic.isLiked ? 'liked' : ''}" onclick="window.toggleLike('${topic.id}')" style="background:none; border:none; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:2px; color: ${topic.isLiked ? '#e53e3e' : 'var(--meta-color)'};">
+                        <span>${topic.isLiked ? '❤️' : '🤍'}</span>
+                        <span>${topic.likeCount || 0}</span>
+                    </button>
+                    <button class="action-btn ${topic.isFavorited ? 'favorited' : ''}" onclick="window.toggleFavorite('${topic.id}')" style="background:none; border:none; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:2px; color: ${topic.isFavorited ? '#d69e2e' : 'var(--meta-color)'};">
+                        <span>${topic.isFavorited ? '⭐' : '☆'}</span>
+                    </button>
+                </div>    
             </div>
             ${ownerActions}
             ${commentsHtml}
@@ -759,6 +776,71 @@ async function loadTopics(categoryId) {
     }
 }
 
+// 1. 切换点赞状态
+window.toggleLike = async function(topicId) {
+    if (!currentAuthUser) {
+        alert('请先登录后再操作！');
+        return;
+    }
+
+    // 检查当前用户是否已经点赞
+    const { data: existing } = await db
+        .from('likes')
+        .select('id')
+        .eq('topic_id', topicId)
+        .eq('user_id', currentAuthUser.id)
+        .maybeSingle();
+
+    if (existing) {
+        // 已点赞 -> 取消点赞（删除记录）
+        const { error } = await db.from('likes').delete().eq('id', existing.id);
+        if (!error) {
+            // 触发你原有的重新加载/刷新板块列表函数，例如 loadTopics() 或 loadCategories()
+            if (typeof loadTopics === 'function') loadTopics();
+            else if (typeof loadCategories === 'function') loadCategories();
+        }
+    } else {
+        // 未点赞 -> 添加点赞记录
+        const { error } = await db.from('likes').insert({ topic_id: topicId, user_id: currentAuthUser.id });
+        if (!error) {
+            if (typeof loadTopics === 'function') loadTopics();
+            else if (typeof loadCategories === 'function') loadCategories();
+        }
+    }
+};
+
+// 2. 切换收藏状态
+window.toggleFavorite = async function(topicId) {
+    if (!currentAuthUser) {
+        alert('请先登录后再操作！');
+        return;
+    }
+
+    // 检查当前用户是否已经收藏
+    const { data: existing } = await db
+        .from('favorites')
+        .select('id')
+        .eq('topic_id', topicId)
+        .eq('user_id', currentAuthUser.id)
+        .maybeSingle();
+
+    if (existing) {
+        // 已收藏 -> 取消收藏
+        const { error } = await db.from('favorites').delete().eq('id', existing.id);
+        if (!error) {
+            if (typeof loadTopics === 'function') loadTopics();
+            else if (typeof loadCategories === 'function') loadCategories();
+        }
+    } else {
+        // 未收藏 -> 添加收藏
+        const { error } = await db.from('favorites').insert({ topic_id: topicId, user_id: currentAuthUser.id });
+        if (!error) {
+            if (typeof loadTopics === 'function') loadTopics();
+            else if (typeof loadCategories === 'function') loadCategories();
+        }
+    }
+};
+   
 window.replyToUser = function(topicId, authorName) {
     const input = document.getElementById(`comment-input-${topicId}`);
     if (input) {
