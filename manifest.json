@@ -1,19 +1,14 @@
 {
   "name": "海高论坛",
   "short_name": "海高论坛",
-  "start_url": "./index.html",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#f4f6f8",
   "theme_color": "#66ccff",
   "icons": [
     {
-      "src": "./image.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "./image.png",
-      "sizes": "512x512",
+      "src": "/image.png",
+      "sizes": "64x64 192x192 512x512",
       "type": "image/png"
     }
   ]
