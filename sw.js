@@ -36,15 +36,36 @@ self.addEventListener('activate', event => {
   );
 });
 
-// 3. 请求拦截与缓存优先策略
+// 3. 网络优先策略（Network First），带优雅兜底
 self.addEventListener('fetch', event => {
-  event.respondWith(
-    caches.match(event.request)
-      .then(response => {
-        // 如果缓存中命中则直接返回，否则向网络发起请求
-        return response || fetch(event.request).catch(() => {
-          // 断网或弱网时的兜底处理（如果请求的是页面，可以返回离线提示等）
-        });
-      })
-  );
+    // 仅处理 http/https 请求
+    if (!event.request.url.startsWith('http')) return;
+
+    event.respondWith(
+        fetch(event.request)
+            .then(networkResponse => {
+                // 如果网络请求成功，克隆一份存入缓存，并返回给页面
+                if (networkResponse && networkResponse.status === 200) {
+                    const responseClone = networkResponse.clone();
+                    caches.open(CACHE_NAME).then(cache => {
+                        cache.put(event.request, responseClone);
+                    });
+                }
+                return networkResponse;
+            })
+            .catch(() => {
+                // 网络请求失败（如断网、弱网超时、偶发中断），尝试从本地缓存读取
+                return caches.match(event.request).then(cachedResponse => {
+                    if (cachedResponse) {
+                        return cachedResponse;
+                    }
+                    
+                    // 如果缓存里也没有，且用户请求的是 HTML 页面，可以返回一个预设的离线兜底提示
+                    if (event.request.headers.get('accept').includes('text/html')) {
+                        // 假设你缓存里有 index.html 或可以返回一个简单的错误提示
+                        return caches.match('./index.html');
+                    }
+                });
+            })
+    );
 });
