@@ -1,19 +1,27 @@
 const CACHE_NAME = 'hailiang-forum-v1';
+
+// 包含所有核心多页面和必要静态资源的缓存列表
 const assetsToCache = [
   './index.html',
+  './confirm.html',
+  './feedback.html',
+  './space.html',
+  './main.js',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
 ];
 
-// 安装时缓存核心资源
+// 1. 安装阶段：缓存所有核心页面与资源
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(assetsToCache))
+      .then(cache => {
+        return cache.addAll(assetsToCache);
+      })
       .then(() => self.skipWaiting())
   );
 });
 
-// 激活时清理旧缓存
+// 2. 激活阶段：清理旧版本的缓存（防止堆积无用文件）
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => {
@@ -28,13 +36,14 @@ self.addEventListener('activate', event => {
   );
 });
 
-// 拦截请求
+// 3. 请求拦截与缓存优先策略
 self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
       .then(response => {
+        // 如果缓存中命中则直接返回，否则向网络发起请求
         return response || fetch(event.request).catch(() => {
-          // 弱网或离线时的兜底策略（可根据需要返回自定义离线页面）
+          // 断网或弱网时的兜底处理（如果请求的是页面，可以返回离线提示等）
         });
       })
   );
