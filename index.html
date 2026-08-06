@@ -338,8 +338,7 @@ window.handlePostSubmit = async function() {
     }
 };
 
-const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
+
 window.sbApp = window.sbApp || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const db = window.sbApp;
 
