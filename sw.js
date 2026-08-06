@@ -99,32 +99,6 @@ self.addEventListener('push', (event) => {
   );
 });
 
-// 监听用户点击系统通知的行为
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close(); // 关闭通知弹窗
-
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      const targetUrl = event.notification.data.url;
-      
-      // 如果已经有打开的窗口，则直接聚焦到该窗口并跳转/刷新到对应页面
-      for (const client of clientList) {
-        if ('focus' in client) {
-          client.focus();
-          if (client.url !== targetUrl && 'navigate' in client) {
-            return client.navigate(targetUrl);
-          }
-          return;
-        }
-      }
-      
-      // 如果没有打开的窗口，则新建一个窗口打开目标链接
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
-      }
-    })
-  );
-});
 // sw.js - 在现有缓存策略基础上增加后台通知轮询逻辑
 
 let activeUserId = null;
