@@ -1,5 +1,5 @@
 {
-  "name": "海高论坛",
+  "name": "<海高论坛>",
   "short_name": "海高论坛",
   "start_url": "./index.html",
   "display": "fullscreen",
@@ -7,7 +7,7 @@
   "theme_color": "#66ccff",
   "icons": [
     {
-      "src": "./icon.png",
+      "src": "./image.png",
       "sizes": "64x64",
       "type": "image/png"
     }
