@@ -1,4 +1,4 @@
-// main.js - 完善版 PWA 注册与 Web Push 订阅控制
+// main.js - 修复 supabase 未定义或异步加载延迟问题
 
 function urlBase64ToUint8Array(base64String) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
@@ -32,14 +32,22 @@ if ('serviceWorker' in navigator) {
                             
                             console.log('Web Push 浏览器订阅成功:', subscription);
 
-                            // 检查全局 supabase 实例是否存在
-                            if (typeof supabase === 'undefined') {
-                                console.error('错误: supabase 客户端未在页面中定义或未引入！');
+                            // 轮询等待全局 supabase 实例加载完成（最多等待 3 秒）
+                            let client = window.supabase || (typeof supabase !== 'undefined' ? supabase : null);
+                            let attempts = 0;
+                            while (!client && attempts < 15) {
+                                await new Promise(resolve => setTimeout(resolve, 200));
+                                client = window.supabase || (typeof supabase !== 'undefined' ? supabase : null);
+                                attempts++;
+                            }
+
+                            if (!client || !client.auth) {
+                                console.error('错误: supabase 客户端加载超时，无法同步订阅到数据库！');
                                 return;
                             }
 
                             // 获取当前登录用户
-                            const { data: { user }, error: authError } = await supabase.auth.getUser();
+                            const { data: { user }, error: authError } = await client.auth.getUser();
                             
                             if (authError || !user) {
                                 console.warn('用户未登录或登录状态已失效，无法将 push_subscription 写入数据库。请先登录论坛！');
@@ -47,7 +55,7 @@ if ('serviceWorker' in navigator) {
                             }
 
                             // 写入 push_subscriptions 表
-                            const { error: dbError } = await supabase.from('push_subscriptions').upsert({
+                            const { error: dbError } = await client.from('push_subscriptions').upsert({
                                 user_id: user.id,
                                 subscription: subscription
                             }, { onConflict: 'user_id' });
@@ -73,7 +81,6 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// 辅助方法：当用户登录成功后，将 userId 发送给 Service Worker 用于后台通知匹配
 window.syncUserIdToSW = function(userId) {
     if (navigator.serviceWorker && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({
