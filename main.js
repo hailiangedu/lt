@@ -111,3 +111,36 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     }, 500);
 });
+
+// 在 main.js 中追加或优化全局 Presence 逻辑
+let globalPresenceChannel = null;
+
+window.initGlobalPresence = async function(user) {
+    if (!user || globalPresenceChannel) return;
+    
+    // 确保 Supabase 实例存在
+    const client = window.sbApp || (window.supabase && window.supabase.createClient('https://snlikjcmuwkyibogfupy.supabase.co', 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW'));
+    if (!client) return;
+
+    try {
+        globalPresenceChannel = client.channel('online-users', {
+            config: {
+                presence: {
+                    key: user.id,
+                },
+            },
+        });
+
+        globalPresenceChannel.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await globalPresenceChannel.track({
+                    user_id: user.id,
+                    online_at: new Date().toISOString(),
+                });
+                console.log('✅ 全局在线状态（Presence）已成功激活');
+            }
+        });
+    } catch (e) {
+        console.error('初始化全局 Presence 异常:', e);
+    }
+};
