@@ -11,6 +11,15 @@ function urlBase64ToUint8Array(base64String) {
     return outputArray;
 }
 
+// 1. 全局唯一 Supabase 客户端初始化（彻底解决多实例警告）
+const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
+
+if (!window.sbApp && window.supabase) {
+    window.sbApp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+}
+
+
 // 缓存全局订阅对象
 window.globalPushSubscription = null;
 
