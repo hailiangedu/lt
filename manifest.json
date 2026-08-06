@@ -9,7 +9,7 @@
     {
       "src": "./image.png",
       "sizes": "64x64",
-      "type": "image/png"
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],
