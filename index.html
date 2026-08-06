@@ -796,6 +796,14 @@ async function loadTopics(categoryId, page = 1) {
         const authorName = authorProfile ? authorProfile.nickname : (topic.user_name || '匿名用户');
         const isAdmin = authorProfile && authorProfile.is_admin;
         const badge = isAdmin ? '<span class="badge-admin">管理员</span>' : '';
+
+        // 1. 获取当前帖子的评论列表并生成 commentsHtml
+        const topicComments = commentMap[topic.id] || [];
+        let commentsHtml = '';
+        topicComments.forEach(comment => {
+            const commentAuthor = profileMap[comment.user_id] ? profileMap[comment.user_id].nickname : '匿名用户';
+            commentsHtml += `<div style="font-size:12px; margin-top:4px; color:var(--meta-color);"><b>${commentAuthor}:</b> ${comment.content}</div>`;
+        });
         
         // 权限判断
         const isOwner = currentAuthUser && currentAuthUser.id === topic.user_id;
