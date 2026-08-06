@@ -735,7 +735,7 @@ async function loadTopics(categoryId, isAppend = false) {
         profilesData.forEach(p => { profileMap[p.id] = p; });
     }
     //.range()分页限制
-    const { data: topics, error } = await db
+    let { data: topics, error } = await db
       .from('topics')
       .select('*')
       .eq('category_id', categoryId)
