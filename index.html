@@ -339,8 +339,13 @@ window.handlePostSubmit = async function() {
 };
 
 
-window.sbApp = window.sbApp || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const db = window.sbApp;
+// 修改后的安全代码：
+// 直接复用 main.js 创建好的全局唯一客户端实例
+const db = window.sbApp || window.supabase.createClient(
+    'https://snlikjcmuwkyibogfupy.supabase.co', 
+    'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW'
+);
+window.sbApp = db;
 
 let currentCategoryId = null;
 let currentUserProfile = null;
