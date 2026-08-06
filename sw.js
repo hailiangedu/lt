@@ -75,7 +75,7 @@ self.addEventListener('fetch', event => {
 
 // 监听后台推送事件 (Push Notification)
 self.addEventListener('push', (event) => {
-  let data = { title: '新消息提醒', body: '您有一条来自 PWA 的新通知', url: './index.html' };
+  let data = { title: '新的消息', body: '您有一条来自海高论坛的新通知', url: './index.html' };
   
   if (event.data) {
     try {
