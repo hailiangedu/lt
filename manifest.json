@@ -1,5 +1,5 @@
 {
-  "name": "<海高论坛>",
+  "name": "海高论坛",
   "short_name": "海高论坛",
   "start_url": "./index.html",
   "display": "fullscreen",
@@ -11,6 +11,20 @@
       "sizes": "64x64",
       "type": "image/png"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "查看用户列表",
+      "short_name": "用户列表",
+      "description": "查看用户列表",
+      "url": "./space.html",
+      "icons": [
+        {
+          "src": "./image.png",
+          "sizes": "64x64",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
-
 }
