@@ -71,3 +71,57 @@ self.addEventListener('fetch', event => {
             })
     );
 });
+// ==================== 4. 系统级通知相关监听逻辑 ====================
+
+// 监听后台推送事件 (Push Notification)
+self.addEventListener('push', (event) => {
+  let data = { title: '新消息提醒', body: '您有一条来自 PWA 的新通知', url: './index.html' };
+  
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data.body = event.data.text();
+    }
+  }
+
+  const options = {
+    body: data.body,
+    icon: './icon.png',    // 对应仓库中的图标
+    badge: './icon.png',
+    data: {
+      url: data.url || './index.html'
+    }
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+// 监听用户点击系统通知的行为
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close(); // 关闭通知弹窗
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      const targetUrl = event.notification.data.url;
+      
+      // 如果已经有打开的窗口，则直接聚焦到该窗口并跳转/刷新到对应页面
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.focus();
+          if (client.url !== targetUrl && 'navigate' in client) {
+            return client.navigate(targetUrl);
+          }
+          return;
+        }
+      }
+      
+      // 如果没有打开的窗口，则新建一个窗口打开目标链接
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
