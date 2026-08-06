@@ -56,61 +56,6 @@ window.syncUserIdToSW = function(userId) {
     }
 };
 // --- 全局在线状态（Supabase Presence）常驻逻辑 ---
-let globalPresenceChannel = null;
-
-window.initGlobalPresence = async function() {
-    // 避免重复初始化
-    if (globalPresenceChannel) return;
-    
-    // 确保 window.supabase 已加载且存在配置
-    if (!window.supabase) return;
-
-    const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
-    
-    if (!window.sbGlobalApp) {
-        window.sbGlobalApp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    }
-
-    try {
-        const { data: { session } } = await window.sbGlobalApp.auth.getSession();
-        if (!session) return; // 未登录则不维护在线状态
-
-        const currentUser = session.user;
-
-        // 加入全局共享的在线用户频道
-        globalPresenceChannel = window.sbGlobalApp.channel('online-users', {
-            config: {
-                presence: {
-                    key: currentUser.id,
-                },
-            },
-        });
-
-        globalPresenceChannel.subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                // 向频道广播当前用户的在线状态及时间戳，实现全局常驻在线
-                await globalPresenceChannel.track({
-                    user_id: currentUser.id,
-                    online_at: new Date().toISOString(),
-                });
-                console.log('全局在线状态追踪已激活');
-            }
-        });
-    } catch (e) {
-        console.error('初始化全局 Presence 失败:', e);
-    }
-};
-
-// 页面加载完成后自动尝试初始化全局在线状态
-window.addEventListener('DOMContentLoaded', () => {
-    // 延迟少许等待 Supabase SDK 加载完成
-    setTimeout(() => {
-        if (typeof window.initGlobalPresence === 'function') {
-            window.initGlobalPresence();
-        }
-    }, 500);
-});
 
 // 在 main.js 中追加或优化全局 Presence 逻辑
 let globalPresenceChannel = null;
