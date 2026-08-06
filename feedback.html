@@ -178,11 +178,16 @@
         });
 
         // Supabase 配置（与主页保持一致）
-        const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
-        const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // 各页面直接复用全局实例
+        const sbApp = window.sbApp;
 
         async function submitFeedback() {
+
+            if (!sbApp) {
+                setTimeout(initSpace, 100);
+                return;
+            }
+            
             const contentInput = document.getElementById('feedback-content');
             const content = contentInput.value.trim();
 
