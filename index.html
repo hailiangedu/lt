@@ -755,8 +755,8 @@ async function loadTopics(categoryId, isAppend = false) {
     if (!isAppend) {
       container.innerHTML = '';
     }
-  
-    const { data: topics, error } = await db.from('topics')
+    let topics;
+    ({ data: topics, error } = await db.from('topics'))
         .select('*')
         .eq('category_id', categoryId)
         .order('created_at', { ascending: false });
