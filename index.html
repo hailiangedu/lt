@@ -149,6 +149,11 @@ button:hover { opacity: 0.9; }
                     <button id="post-submit-btn" onclick="window.handlePostSubmit()">发布话题</button> 
                 </div> 
                 <div id="topics-container"></div> 
+                <div id="pagination-controls" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">
+                    <button id="prev-page" onclick="changePage(-1)" style="padding: 4px 10px; cursor: pointer;">上一页</button>
+                    <span id="page-info" style="font-size: 13px; color: var(--meta-color);">第 1 页</span>
+                    <button id="next-page" onclick="changePage(1)" style="padding: 4px 10px; cursor: pointer;">下一页</button>
+                </div>
             </div> 
         </div> 
     </div> 
