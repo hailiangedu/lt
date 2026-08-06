@@ -144,3 +144,45 @@ window.initGlobalPresence = async function(user) {
         console.error('初始化全局 Presence 异常:', e);
     }
 };
+// --- 数据库心跳保活与全局在线状态机制 ---
+let heartbeatTimer = null;
+
+window.initUserHeartbeat = async function() {
+    if (heartbeatTimer) return; // 避免重复启动
+
+    // 确保 Supabase 客户端存在
+    const client = window.sbApp || (window.supabase && window.supabase.createClient('https://snlikjcmuwkyibogfupy.supabase.co', 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW'));
+    if (!client) return;
+
+    try {
+        const { data: { session } } = await client.auth.getSession();
+        if (!session || !session.user) return;
+
+        const userId = session.user.id;
+
+        // 发送心跳函数：更新 profiles 表的 last_seen_at 为当前时间
+        const sendHeartbeat = async () => {
+            await client.from('profiles')
+                .update({ last_seen_at: new Date().toISOString() })
+                .eq('id', userId);
+        };
+
+        // 1. 页面加载后立即上报一次在线
+        await sendHeartbeat();
+
+        // 2. 每隔 25 秒自动上报一次心跳（小于离线判定阈值即可）
+        heartbeatTimer = setInterval(sendHeartbeat, 25000);
+        console.log('💓 用户数据库心跳保活已启动');
+    } catch (err) {
+        console.error('初始化心跳异常:', err);
+    }
+};
+
+// 页面加载完成后自动触发心跳初始化
+window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+        if (typeof window.initUserHeartbeat === 'function') {
+            window.initUserHeartbeat();
+        }
+    }, 600);
+});
