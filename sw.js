@@ -1,126 +1,127 @@
-const CACHE_NAME = 'hailiang-forum-v5';
-
-// 包含所有核心多页面和必要静态资源的缓存列表
+const CACHE_NAME = 'hailiang-forum-v2';
 const assetsToCache = [
-  './index.html',
-  './confirm.html',
-  './feedback.html',
-  './space.html',
-  './main.js',
-  './image.png',
-  './icon.png',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
+    './index.html',
+    './confirm.html',
+    './feedback.html',
+    './space.html',
+    './main.js',
+    './image.png',
+    './icon.png',
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
 ];
 
 // 1. 安装阶段：缓存所有核心页面与资源
 self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        return cache.addAll(assetsToCache);
-      })
-      .then(() => self.skipWaiting())
-  );
+    event.waitUntil(
+        caches.open(CACHE_NAME)
+            .then(cache => {
+                return cache.addAll(assetsToCache);
+            })
+            .then(() => self.skipWaiting())
+    );
 });
 
-// 2.激活阶段：清理旧版本的缓存（防止堆积无用文件）
+// 2. 激活阶段：清理旧版本的缓存（防止堆积无用文件）
 self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys().then(keys => {
-      return Promise.all(
-        keys.map(key => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
-  );
+    event.waitUntil(
+        caches.keys().then(keys => {
+            return Promise.all(
+                keys.map(key => {
+                    if (key !== CACHE_NAME) {
+                        return caches.delete(key);
+                    }
+                })
+            );
+        }).then(() => self.clients.claim())
+    );
 });
 
-// 3. 网络优先策略（Network First），带优雅兜底
+// 3. 网络优先策略（Network First），带优雅兜底（已修复 POST 请求无法缓存的报错）
 self.addEventListener('fetch', event => {
-  // 仅处理 http/https 请求
-  if (!event.request.url.startsWith('http')) return;
+    // 仅处理 http/https 请求
+    if (!event.request.url.startsWith('http')) return;
 
-  event.respondWith(
-    fetch(event.request)
-      .then(networkResponse => {
-        // 如果网络请求成功，克隆一份存入缓存，并返回给页面
-        if (networkResponse && networkResponse.status === 200) {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseClone);
-          });
-        }
-        return networkResponse;
-      })
-      .catch(() => {
-        // 网络请求失败，尝试从本地缓存读取
-        return caches.match(event.request).then(cachedResponse => {
-          if (cachedResponse) {
-            return cachedResponse;
-          }
-          // 如果缓存里也没有，且请求的是 HTML 页面，返回离线兜底提示
-          if (event.request.headers.get('accept').includes('text/html')) {
-            return caches.match('./index.html');
-          }
-        });
-      })
-  );
+    event.respondWith(
+        fetch(event.request)
+            .then(networkResponse => {
+                // 如果网络请求成功，且请求方法是 GET，则克隆一份存入缓存并返回给页面
+                if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
+                    const responseClone = networkResponse.clone();
+                    caches.open(CACHE_NAME).then(cache => {
+                        cache.put(event.request, responseClone);
+                    });
+                }
+                return networkResponse;
+            })
+            .catch(() => {
+                // 网络请求失败，尝试从本地缓存读取
+                return caches.match(event.request).then(cachedResponse => {
+                    if (cachedResponse) {
+                        return cachedResponse;
+                    }
+                    // 如果缓存里也没有，且请求的是 HTML 页面，返回离线兜底提示
+                    if (event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html')) {
+                        return caches.match('./index.html');
+                    }
+                });
+            })
+    );
 });
 
 // ==================== 4. 系统级通知相关监听逻辑 ====================
 
-// 监听来自服务器/边缘函数的主动推送事件 (Push Notification)
+// 监听来自后端边缘函数 (Web Push) 的主动推送事件
 self.addEventListener('push', (event) => {
-  let data = {
-    title: '海高论坛',
-    body: '您有一条新的通知',
-    url: './index.html'
-  };
+    let data = { 
+        title: '海高论坛新通知', 
+        body: '您有一条新的消息', 
+        url: './index.html' 
+    };
 
-  if (event.data) {
-    try {
-      data = event.data.json();
-    } catch (e) {
-      data.body = event.data.text();
+    if (event.data) {
+        try {
+            const payload = event.data.json();
+            data.title = payload.title || data.title;
+            data.body = payload.body || data.body;
+            data.url = payload.url || data.url;
+        } catch (e) {
+            data.body = event.data.text();
+        }
     }
-  }
 
-  const options = {
-    body: data.body,
-    icon: './icon.png',
-    badge: './icon.png',
-    data: { url: data.url || './index.html' }
-  };
+    const options = {
+        body: data.body,
+        icon: './image.png',
+        badge: './icon.png',
+        vibrate: [200, 100, 200],
+        data: { url: data.url }
+    };
 
-  event.waitUntil(
-    self.registration.showNotification(data.title, options)
-  );
+    // 核心：唤醒操作系统的系统级通知横幅
+    event.waitUntil(
+        self.registration.showNotification(data.title, options)
+    );
 });
 
-// 监听用户点击系统通知的行为
+// 监听用户点击系统通知的行为：点击后自动打开并聚焦到对应网页
 self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
+    event.notification.close();
 
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      const targetUrl = event.notification.data.url || './index.html';
-      
-      for (const client of clientList) {
-        if ('focus' in client) {
-          client.focus();
-          if (client.url !== targetUrl && 'navigate' in client) {
-            return client.navigate(targetUrl);
-          }
-          return;
-        }
-      }
-      
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
-      }
-    })
-  );
+    const targetUrl = event.notification.data?.url || './index.html';
+
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+            // 如果已经有打开的窗口，直接聚焦
+            for (let i = 0; i < windowClients.length; i++) {
+                const client = windowClients[i];
+                if (client.url.includes(self.location.origin) && 'focus' in client) {
+                    return client.focus();
+                }
+            }
+            // 否则打开新窗口
+            if (clients.openWindow) {
+                return clients.openWindow(targetUrl);
+            }
+        })
+    );
 });
