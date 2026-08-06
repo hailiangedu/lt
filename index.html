@@ -410,6 +410,10 @@ async function initUserSession(user) {
         }
     });
 
+    if (typeof window.initGlobalPresence === 'function') {
+        window.initGlobalPresence(user);
+    }
+
     showForum();
 }
 
