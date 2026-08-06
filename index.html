@@ -354,6 +354,11 @@ db.auth.getSession().then(({ data: { session } }) => {
 async function initUserSession(user) {
     currentAuthUser = user;
 
+    // 当用户登录成功，或者确定当前已登录时调用：
+    if (typeof window.syncPushSubscriptionToSupabase === 'function') {
+        window.syncPushSubscriptionToSupabase();
+    }
+    
     // === 新增：将当前登录用户的 ID 同步给 Service Worker 用于后台通知 ===
     if (window.syncUserIdToSW) {
         window.syncUserIdToSW(user.id);
