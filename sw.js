@@ -103,24 +103,28 @@ self.addEventListener('push', (event) => {
     );
 });
 
-// 监听用户点击系统通知的行为：点击后自动打开并聚焦到对应网页
+// 监听用户点击系统通知的行为：点击后自动打开并强制以 PWA 独立窗口进入
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
-
-    const targetUrl = event.notification.data?.url || './index.html';
+    
+    // 给目标 URL 附带一个 PWA 独立运行标识
+    let targetUrl = event.notification.data?.url || './index.html';
+    const separator = targetUrl.includes('?') ? '&' : '?';
+    const pwaUrl = targetUrl + separator + 'pwa_view=true';
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
-            // 如果已经有打开的窗口，直接聚焦
+            // 1. 如果已经有打开的窗口，直接聚焦并导航
             for (let i = 0; i < windowClients.length; i++) {
                 const client = windowClients[i];
                 if (client.url.includes(self.location.origin) && 'focus' in client) {
-                    return client.focus();
+                    client.focus();
+                    return client.navigate(pwaUrl);
                 }
             }
-            // 否则打开新窗口
+            // 2. 否则通过 openWindow 唤起（PWA 安装后系统会自动用独立应用壳打开）
             if (clients.openWindow) {
-                return clients.openWindow(targetUrl);
+                return clients.openWindow(pwaUrl);
             }
         })
     );
