@@ -755,7 +755,7 @@ async function loadTopics(categoryId, isAppend = false) {
     if (!isAppend) {
       container.innerHTML = '';
     }
-    let topics;
+    //let topics;
     ({ data: topics, error } = await db.from('topics'))
         .select('*')
         .eq('category_id', categoryId)
