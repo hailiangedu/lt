@@ -735,7 +735,7 @@ async function loadTopics(categoryId, isAppend = false) {
         profilesData.forEach(p => { profileMap[p.id] = p; });
     }
     //.range()分页限制
-    let { data: topics, error } = await db
+    const { data: topics, error } = await db
       .from('topics')
       .select('*')
       .eq('category_id', categoryId)
@@ -755,11 +755,11 @@ async function loadTopics(categoryId, isAppend = false) {
     if (!isAppend) {
       container.innerHTML = '';
     }
-    //let topics;
-    ({ data: topics, error } = await db.from('topics'))
-        .select('*')
-        .eq('category_id', categoryId)
-        .order('created_at', { ascending: false });
+    //const topics;
+    //({ data: topics, error } = await db.from('topics'))
+    //    .select('*')
+    //    .eq('category_id', categoryId)
+    //    .order('created_at', { ascending: false });
 
     if (error || !topics || topics.length === 0) {
         container.innerHTML = '<div class="card"><p style="font-size:13px; color:var(--meta-color); margin:0;">该板块下暂无话题，快来发表第一个话题吧！</p></div>';
