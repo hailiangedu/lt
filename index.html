@@ -351,11 +351,6 @@ let currentCategoryId = null;
 let currentUserProfile = null;
 let currentAuthUser = null;
 
-let currentOffset = 0;
-const PAGE_SIZE = 5;//帖子数量
-let isLoading = false;//防重复加载，状态变量
-let hasMore = true;//余量检测
-
 db.auth.getSession().then(({ data: { session } }) => {
     if (session) initUserSession(session.user);
 });
@@ -717,55 +712,26 @@ async function loadCategories() {
 }
 
 // 🛡️ 评论时间调整为完整显示年月日与时间
-async function loadTopics(categoryId, isAppend = false) {
+async function loadTopics(categoryId) {
     const container = document.getElementById('topics-container');
-  
-    if (!isAppend) {
-      currentOffset = 0;
-      hasMore = true;
-      isLoading = false;
-      container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
-    }
-    if (isLoading || !hasMore) return;
-    isLoading = true;
+    container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
     
     const { data: profilesData } = await db.from('profiles').select('id, nickname, is_admin');
     const profileMap = {};
     if (profilesData) {
         profilesData.forEach(p => { profileMap[p.id] = p; });
     }
-    //.range()分页限制
-    const { data: topics, error } = await db
-      .from('topics')
-      .select('*')
-      .eq('category_id', categoryId)
-      .order('created_at', { ascending: false })
-      .range(currentOffset, currentOffset + PAGE_SIZE - 1);
 
-    isLoading = false;
-
-    if (error || !topics || topics.length === 0) {
-      hasMore = false;
-      if (!isAppend) {
-        container.innerHTML = '<div class="card"><p style="font-size:13px; color:var(--meta-color); margin:0;">该板块下暂无话题，快来发表第一个话题吧！</p></div>';
-      }
-      return;
-    }
-    // 如果是首次加载，清空“加载中...”提示
-    if (!isAppend) {
-      container.innerHTML = '';
-    }
-    //const topics;
-    //({ data: topics, error } = await db.from('topics'))
-    //    .select('*')
-    //    .eq('category_id', categoryId)
-    //    .order('created_at', { ascending: false });
+    const { data: topics, error } = await db.from('topics')
+        .select('*')
+        .eq('category_id', categoryId)
+        .order('created_at', { ascending: false });
 
     if (error || !topics || topics.length === 0) {
         container.innerHTML = '<div class="card"><p style="font-size:13px; color:var(--meta-color); margin:0;">该板块下暂无话题，快来发表第一个话题吧！</p></div>';
         return;
     }
-    //获取评论
+
     const topicIds = topics.map(t =>t.id);
     const { data: comments } = await db.from('comments').select('*').in('topic_id', topicIds);
     const commentMap = {};
@@ -774,14 +740,6 @@ async function loadTopics(categoryId, isAppend = false) {
             if (!commentMap[c.topic_id]) commentMap[c.topic_id] = [];
             commentMap[c.topic_id].push(c);
         });
-    }
-
-    // 渲染并追加帖子到容器
-    renderTopicsList(topics, profileMap, commentMap, isAppend);
-
-    currentOffset += topics.length;
-    if(topics.length < PAGE_SIZE) {
-      hasMore = false;
     }
 
     // === 【新增】真实查询当前用户的点赞与收藏状态以及全站点赞数 ===
@@ -886,59 +844,7 @@ async function loadTopics(categoryId, isAppend = false) {
         container.appendChild(div);
     }
 }
-//封
-//装
-//逻
-//辑
-/*function renderTopicsList(topics, profileMap, commentMap, likedSet, favSet, likeCountMap, isAppend) {
-  const container = document.getElementById('topics-container');
-  
-  // 如果不是追加加载，先清空容器
-  if (!isAppend) {
-    container.innerHTML = '';
-  }
 
-  topics.forEach(topic => {
-    const authorProfile = profileMap[topic.user_id] || {};
-    const authorName = author.nickname || '匿名用户';
-    const badge = author.is_admin ? '<span style="color:#e53e3e; font-size:10px; border:1px solid #e53e3e; padding:0 3px; border-radius:3px;">管理员</span>' : '';
-    
-    // (保留你原有的评论、点赞、收藏状态计算逻辑...)
-    const isLiked = likedSet.has(topic.id);
-    const isFavorited = favSet.has(topic.id);
-    const likeCount = likeCountMap[topic.id] || 0;
-
-    const div = document.createElement('div');
-    div.className = 'card';
-    div.innerHTML = `
-      <h4 style="margin:0 0 6px 0;">${topic.title}</h4>
-      <p style="margin:0 0 8px 0; white-space: pre-wrap; font-size:13px;">${topic.content}</p>
-      <div class="flex" style="margin-top:6px; margin-bottom:4px;">
-        <span style="font-size:11px; color:var(--meta-color);">
-          发布者：<b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${authorName}</b> ${badge} &nbsp;|&nbsp; 发布于 ${new Date(topic.created_at).toLocaleString()}
-        </span>
-        <div style="display:flex; gap:10px; align-items:center;">
-          <button class="action-btn ${isLiked ? 'liked' : ''}" onclick="window.handleLike('${topic.id}', this)" style="background:none; border:none; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:2px; color:${isLiked ? '#e53e3e' : 'var(--meta-color)'};">
-            <span class="like-icon">${isLiked ? '❤️' : '♡'}</span>
-            <span class="like-count">${likeCount}</span>
-          </button>
-          <button class="action-btn ${isFavorited ? 'favorited' : ''}" onclick="window.handleFavorite('${topic.id}', this)" style="background:none; border:none; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:2px; color:${isFavorited ? '#d69e2e' : 'var(--meta-color)'};">
-            <span class="fav-icon">${isFavorited ? '⭐' : '☆'}</span>
-          </button>
-        </div>
-      </div>
-      ${ownerActions}
-      ${commentsHtml}
-      <div style="margin-top:8px; display:flex; gap:6px;">
-          <input type="text" id="comment-input-${topic.id}" placeholder="写下你的评论..." style="font-size:12px; padding:3px 8px; flex:1;">
-          <button onclick="window.createComment('${topic.id}')" style="font-size:12px; padding:3px 12px;">评论</button>
-      </div>
-    `;
-    
-    container.appendChild(div);
-  });
-}
-*/
 // 点赞处理函数
 window.handleLike = async function(postId, btnElement) {
     if (!currentAuthUser) {
@@ -1228,15 +1134,7 @@ window.viewUserProfile = async function(userId) {
     html += `</div>`;
     modalContent.innerHTML = html;
 };
-window.addEventListener('scroll', () => {
-  // 当滚动条位置 + 视口高度 >= 页面总高度 - 100px 时触发
-  if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 100) {
-    // 确保当前有选中的分类、没有正在进行的加载、并且还有后续数据
-    if (typeof currentCategoryId !== 'undefined' && currentCategoryId && !isLoading && hasMore) {
-      loadTopics(currentCategoryId, true); // 传入 true 代表滚动追加下 5 条
-    }
-  }
-});
+
 window.closeUserModal = function() {
     document.getElementById('user-modal').classList.add('hidden');
 };
