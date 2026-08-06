@@ -7,6 +7,8 @@ const assetsToCache = [
   './feedback.html',
   './space.html',
   './main.js',
+  './image.png',
+  './icon.png',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
 ];
 
