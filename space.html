@@ -186,11 +186,14 @@
         });
 
         // 2. Supabase 配置与基于心跳时间戳的在线判定逻辑
-        const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
-        const sbApp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // 2. 复用全局 Supabase 实例与基于心跳时间戳的在线判定逻辑
+        const sbApp = window.sbApp;
 
         async function initSpace() {
+            if (!sbApp) {
+                setTimeout(initSpace, 100);
+                return;
+            }
             // 1. 鉴权检查，确保用户已登录
             const { data: { session }, error: sessionError } = await sbApp.auth.getSession();
             if (sessionError || !session) {
