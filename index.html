@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+  <!DOCTYPE html> 
 <html lang="zh-CN"> 
 <head> 
 <meta charset="UTF-8"> 
@@ -350,10 +350,33 @@ let currentAuthUser = null;
 db.auth.getSession().then(({ data: { session } }) => {
     if (session) initUserSession(session.user);
 });
+// 定义一个全局同步函数，供 main.js 或登录成功后调用
+window.trySyncPushSubscription = async function() {
+    if (!window.globalPushSubscription || !currentAuthUser) return;
+
+    try {
+        const { error: dbError } = await db.from('push_subscriptions').upsert({
+            user_id: currentAuthUser.id,
+            subscription: window.globalPushSubscription
+        }, { onConflict: 'user_id' });
+
+        if (dbError) {
+            console.error('写入 push_subscriptions 数据库失败:', dbError.message);
+        } else {
+            console.log('🎉 推送订阅凭证已成功同步至 Supabase 数据库！');
+        }
+    } catch (e) {
+        console.error('同步推送订阅异常:', e);
+    }
+};
 
 async function initUserSession(user) {
-    currentAuthUser = user;
-
+    currentAuthUser = user; 
+    
+    // 1. 尝试同步推送订阅到数据库（此时 db 和 user 均已 100% 就绪）
+    if (typeof window.trySyncPushSubscription === 'function') {
+        window.trySyncPushSubscription();
+    }
     // 当用户登录成功，或者确定当前已登录时调用：
     if (typeof window.syncPushSubscriptionToSupabase === 'function') {
         window.syncPushSubscriptionToSupabase();
