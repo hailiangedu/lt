@@ -180,80 +180,78 @@
     const sbApp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     async function initSpace() {
-        const { data: { session }, error: sessionError } = await sbApp.auth.getSession();
-        if (sessionError || !session) {
-            alert('请先登录论坛！');
-            window.location.href = 'index.html';
-            return;
-        }
-        const currentUser = session.user;
-        const container = document.getElementById('users-container');
-
-        // 先获取所有 profiles 数据
-        const { data: profiles, error } = await sbApp.from('profiles').select('*');
-        if (error) {
-            container.innerHTML = `<p style="color:red;">加载用户失败: ${error.message}</p>`;
-            return;
-        }
-
-        // 创建频道
-        const room = sbApp.channel('online-users');
-
-        // 渲染函数
-        const renderUsers = () => {
-            const presenceState = room.presenceState();
-            const onlineUserIds = new Set();
-            Object.values(presenceState).forEach(presences => {
-                presences.forEach(p => onlineUserIds.add(p.user_id));
-            });
-
-            container.innerHTML = '';
-            if (!profiles || profiles.length === 0) {
-                container.innerHTML = `<p style="color:var(--meta-color);">暂无用户档案记录</p>`;
-                return;
-            }
-
-            profiles.forEach(user => {
-                const isOnline = onlineUserIds.has(user.id) || (user.id === currentUser?.id);
-                const card = document.createElement('div');
-                card.className = 'user-card';
-                card.innerHTML = `
-                    <div class="user-info">
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <b style="font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${user.nickname || '未命名用户'}</b>
-                            ${user.is_admin ? '<span class="badge-admin">管理员</span>' : ''}
-                        </div>
-                        <div class="user-meta">
-                            <span>年级：${user.grade || '未填'}</span>
-                        </div>
-                    </div>
-                    <div style="font-size: 12px; display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                        <span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>
-                        <span style="color: ${isOnline ? 'var(--online-color)' : 'var(--meta-color)'}; font-weight: 500;">
-                            ${isOnline ? '在线' : '离线'}
-                        </span>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-        };
-
-        // 必须在 subscribe() 之前绑定 on 事件
-        room.on('presence', { event: 'sync' }, renderUsers);
-        room.on('presence', { event: 'join' }, renderUsers);
-        room.on('presence', { event: 'leave' }, renderUsers);
-
-        // 最后再 subscribe 并 track 自身状态
-        room.subscribe(async (status) => {
-            if (status === 'SUBSCRIBED') {
-                await room.track({
-                    user_id: currentUser.id,
-                    online_at: new Date().toISOString(),
-                });
-                renderUsers();
-            }
-        });
+    // 1. 鉴权检查，确保用户已登录
+    const { data: { session }, error: sessionError } = await sbApp.auth.getSession();
+    if (sessionError || !session) {
+        alert('请先登录论坛！');
+        window.location.href = 'index.html';
+        return;
     }
+    const currentUser = session.user;
+    const container = document.getElementById('users-container');
+
+    // 2. 获取所有 profiles 数据
+    const { data: profiles, error } = await sbApp.from('profiles').select('*');
+    if (error) {
+        container.innerHTML = `<p style="color:red;">加载用户失败: ${error.message}</p>`;
+        return;
+    }
+
+    // 3. 加入共享的在线用户频道（用于接收 Presence 广播并渲染大厅）
+    const room = sbApp.channel('online-users');
+
+    // 渲染函数
+    const renderUsers = () => {
+        const presenceState = room.presenceState();
+        const onlineUserIds = new Set();
+        Object.values(presenceState).forEach(presences => {
+            presences.forEach(p => onlineUserIds.add(p.user_id));
+        });
+
+        container.innerHTML = '';
+        if (!profiles || profiles.length === 0) {
+            container.innerHTML = `<p style="color:var(--meta-color);">暂无用户档案记录</p>`;
+            return;
+        }
+
+        profiles.forEach(user => {
+            // 判断依据：频道中存在其 tracking 记录，或者为当前登录用户
+            const isOnline = onlineUserIds.has(user.id) || (user.id === currentUser?.id);
+            const card = document.createElement('div');
+            card.className = 'user-card';
+            card.innerHTML = `
+                <div class="user-info">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <b style="font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${user.nickname || '未命名用户'}</b>
+                        ${user.is_admin ? '<span class="badge-admin">管理员</span>' : ''}
+                    </div>
+                    <div class="user-meta">
+                        <span>年级：${user.grade || '未填'}</span>
+                    </div>
+                </div>
+                <div style="font-size: 12px; display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                    <span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>
+                    <span style="color: ${isOnline ? 'var(--online-color)' : 'var(--meta-color)'}; font-weight: 500;">
+                        ${isOnline ? '在线' : '离线'}
+                    </span>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    };
+
+    // 4. 绑定监听事件（只负责监听同步、加入、离开并刷新 UI）
+    room.on('presence', { event: 'sync' }, renderUsers);
+    room.on('presence', { event: 'join' }, renderUsers);
+    room.on('presence', { event: 'leave' }, renderUsers);
+
+    // 5. 纯订阅模式（不再在 space.html 内部单独 track，因为由全局 main.js 统一在后台维持常驻在线）
+    room.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+            renderUsers();
+        }
+    });
+}
 
     initSpace();
 </script>
