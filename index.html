@@ -728,6 +728,13 @@ async function loadTopics(categoryId, page = 1) {
     const container = document.getElementById('topics-container');
     container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
 
+    const { data: profilesData } = await db.from('profiles').select('id, nickname, is_admin');
+    const profileMap = {};
+    if (profilesData) {
+        profilesData.forEach(p => { 
+            profileMap[p.id] = p; 
+        });
+    }
     // 查询总数与当前页数据
     const from = (currentPage - 1) * pageSize;
     const to = from + pageSize - 1;
@@ -748,8 +755,88 @@ async function loadTopics(categoryId, page = 1) {
     }
 
     // --- 后续原有的 profiles、comments、likes 查询逻辑保持不变 ---
-    const topicIds = topics.map(t =>t.id);            
-    if (isOwner) {                
+    const topicIds = topics.map(t =>t.id);
+
+    const { data: comments } = await db.from('comments').select('*').in('topic_id', topicIds);
+    const commentMap = {};
+
+    if (comments) {
+        comments.forEach(c => {
+            if (!commentMap[c.topic_id]) commentMap[c.topic_id] = []; 
+            commentMap[c.topic_id].push(c);
+        });
+    }
+
+    let likedSet = new Set();
+    let favSet = new Set();
+    if (currentAuthUser) {
+        const { data: userLikes } = await db.from('likes').select('topic_id').eq('user_id', currentAuthUser.id).in('topic_id', topicIds);
+        if (userLikes) userLikes.forEach(l => likedSet.add(l.topic_id));
+        
+        const { data: userFavs } = await db.from('favorites').select('topic_id').eq('user_id', currentAuthUser.id).in('topic_id', topicIds);
+        if (userFavs) userFavs.forEach(f => favSet.add(f.topic_id));
+    }
+    
+    const { data: allLikes } = await db.from('likes').select('topic_id').in('topic_id', topicIds);
+    const likeCountMap = {};
+    if (allLikes) {
+        allLikes.forEach(l => {
+            likeCountMap[l.topic_id] = (likeCountMap[l.topic_id] || 0) + 1;
+        });
+    }
+
+    // 7. 清空容器并开始循环渲染当前页的帖子
+    container.innerHTML = ''; 
+    
+    for (const topic of topics) {
+        const div = document.createElement('div');
+        div.className = 'card'; 
+
+        const authorProfile = profileMap[topic.user_id];
+        const authorName = authorProfile ? authorProfile.nickname : (topic.user_name || '匿名用户');
+        const isAdmin = authorProfile && authorProfile.is_admin;
+        const badge = isAdmin ? '<span class="badge-admin">管理员</span>' : '';
+        
+        // 权限判断
+        const isOwner = currentAuthUser && currentAuthUser.id === topic.user_id;
+        const isUserAdmin = currentUserProfile && currentUserProfile.is_admin;
+
+        // --- 你可以在这里继续拼接你的帖子卡片 HTML 内容 ---
+        const isLiked = likedSet.has(topic.id);        
+        const isFavorited = favSet.has(topic.id);        
+        const likeCount = likeCountMap[topic.id] || 0;
+        div.innerHTML = `
+                <h4 style="margin:0 0 6px 0;">${topic.title}</h4>
+                <p style="margin:0 0 8px 0; white-space: pre-wrap; font-size:13px;">${topic.content}</p>
+                <div class="flex" style="margin-top:6px; margin-bottom:4px;">
+                    <span style="font-size:11px; color:var(--meta-color);">
+                        发布者：<b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${authorName}</b>${badge} &nbsp;|&nbsp; 发布于 ${new Date(topic.created_at).toLocaleString()}
+                    </span>
+                    <!-- 【完整保留】点赞与收藏交互按钮 -->
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <button class="action-btn ${isLiked ? 'liked' : ''}" onclick="window.handleLike('${topic.id}', this)" style="background:none; border:none; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:2px; color:${isLiked ? '#e53e3e' : 'var(--meta-color)'};">
+                            <span class="like-icon">${isLiked ? '❤️' : '♡'}</span> 
+                            <span class="like-count">${likeCount}</span>
+                        </button>
+                        <button class="action-btn ${isFavorited ? 'favorited' : ''}" onclick="window.handleFavorite('${topic.id}', this)" style="background:none; border:none; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:2px; color:${isFavorited ? '#d69e2e' : 'var(--meta-color)'};">
+                            <span class="fav-icon">${isFavorited ? '⭐' : '☆'}</span> 
+                        </button>
+                    </div>  
+                </div>                
+${ownerActions}                
+${commentsHtml}
+                <div style="margin-top:8px; display:flex; gap:6px;">
+                    <input type="text" id="comment-input-${topic.id}" placeholder="写下你的评论..." style="font-size:12px; padding:3px 8px; flex:1;">
+                    <button onclick="window.createComment('${topic.id}')" style="font-size:12px; padding:3px 12px;">评论</button>
+                </div>
+            `;            
+container.appendChild(div);
+    }
+
+    // 8. 刷新分页按钮状态及页码显示
+    updatePaginationUI();
+    }
+    /*if (isOwner) {                
     ownerActions += `<button onclick="window.openEditModal('${topic.id}', \`${topic.title.replace(/`/g, '\\`')}\`, \`${topic.content.replace(/`/g, '\\`')}\`)" style="background:transparent; color:#d69e2e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">编辑</button>`;            
     }            
     ownerActions += `<button onclick="window.deleteTopic('${topic.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">删除</button>`;            
@@ -779,9 +866,10 @@ async function loadTopics(categoryId, page = 1) {
                     `;            
     });            
     commentsHtml += '</div>';        
-    }        
+    }
+    */
     // === 【新增】读取该话题对应的点赞与收藏状态 ===        
-    const isLiked = likedSet.has(topic.id);        
+    /*const isLiked = likedSet.has(topic.id);        
     const isFavorited = favSet.has(topic.id);        
     const likeCount = likeCountMap[topic.id] || 0;
             div.innerHTML = `
@@ -812,7 +900,7 @@ async function loadTopics(categoryId, page = 1) {
     container.appendChild(div);    
     //}
     // 更新分页控件状态
-    updatePaginationUI();
+    updatePaginationUI();*/
 //}
 
 // 翻页触发函数
@@ -827,9 +915,13 @@ function changePage(direction) {
 // 更新分页按钮可用性及页码显示文本
 function updatePaginationUI() {
     const maxPage = Math.ceil(totalTopicsCount / pageSize) || 1;
-    document.getElementById('page-info').innerText = `第 ${currentPage} / ${maxPage} 页`;
-    document.getElementById('prev-page').disabled = currentPage <= 1;
-    document.getElementById('next-page').disabled = currentPage >= maxPage;
+    const pageInfo = document.getElementById('page-info');
+    const prevBtn = document.getElementById('prev-page');
+    const nextBtn = document.getElementById('next-page');
+
+    if (pageInfo) pageInfo.innerText = `第 ${currentPage} / ${maxPage} 页`;
+    if (prevBtn) prevBtn.disabled = currentPage <= 1;
+    if (nextBtn) nextBtn.disabled = currentPage >= maxPage;
 }
 // 🛡️ 评论时间调整为完整显示年月日与时间
 //async function loadTopics(categoryId) {
