@@ -42,7 +42,17 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
     // 仅处理 http/https 请求
     if (!event.request.url.startsWith('http')) return;
+    const url = new URL(event.request.url);
 
+    // 如果请求的是图标，直接从缓存或本地稳妥返回指定的 image.png
+    if (url.pathname.endsWith('/image.png') || url.pathname.endsWith('/icon.png')) {
+      event.respondWith(
+        caches.match(event.request).then(cached => {
+          return cached || fetch(event.request);
+        })
+      );
+      return;
+    }
     event.respondWith(
         fetch(event.request)
             .then(networkResponse => {
