@@ -748,8 +748,6 @@ async function loadTopics(categoryId, page = 1) {
     }
 
     // --- 后续原有的 profiles、comments、likes 查询逻辑保持不变 ---
-    const topicIds = topics.map(t => t.id);
-    // ... (中间获取 profileMap、comments、likes 的代码同原逻辑) ...
     const topicIds = topics.map(t =>t.id);            
     if (isOwner) {                
     ownerActions += `<button onclick="window.openEditModal('${topic.id}', \`${topic.title.replace(/`/g, '\\`')}\`, \`${topic.content.replace(/`/g, '\\`')}\`)" style="background:transparent; color:#d69e2e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">编辑</button>`;            
