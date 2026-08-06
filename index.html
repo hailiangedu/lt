@@ -805,6 +805,15 @@ async function loadTopics(categoryId, page = 1) {
         const isLiked = likedSet.has(topic.id);        
         const isFavorited = favSet.has(topic.id);        
         const likeCount = likeCountMap[topic.id] || 0;
+        // 权限与操作按钮定义（在这里补上 ownerActions）
+        let ownerActions = '';
+        if (isOwner) {
+            ownerActions += `<button onclick="window.openEditModal('${topic.id}', \`${topic.title.replace(/`/g, '\\`')}\`, \`${topic.content.replace(/`/g, '\\`')}\`)" style="background:transparent; color:#d69e2e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">编辑</button>`;
+        }
+        ownerActions += `<button onclick="window.deleteTopic('${topic.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">删除</button>`;
+        if (isUserAdmin) {
+            ownerActions += `<button onclick="window.warnUser('${topic.user_id}', '${topic.id}')" style="background:transparent; color:#c53030; border:none; font-size:11px; cursor:pointer; padding:0 4px;">警告</button>`;
+        }
         div.innerHTML = `
                 <h4 style="margin:0 0 6px 0;">${topic.title}</h4>
                 <p style="margin:0 0 8px 0; white-space: pre-wrap; font-size:13px;">${topic.content}</p>
