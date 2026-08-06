@@ -806,14 +806,14 @@ async function loadTopics(categoryId, page = 1) {
             const isCommentAdmin = currentUserProfile && currentUserProfile.is_admin;
             const canDeleteComment = isCommentOwner || isCommentAdmin;
 
-            let replyAction = `<button onclick="window.replyToUser('${topic.id}', \`${commentAuthor}\`)" style="background:transparent; color:var(--primary-color, #3182ce); border:none; font-size:11px; cursor:pointer; padding:0 4px; margin-left:6px;">回复</button>`;
+            let replyAction = `<button onclick="window.replyToUser('${topic.id}', \`${commentAuthor}\`)" style="background:transparent; color:var(--primary-color, #3182ce); border:none; font-weight: normal; font-size:9px; cursor:pointer; padding:0 4px; margin-left:6px;">回复</button>`;
 
             let commentActions = '';
             if (canDeleteComment) {
                 commentActions += `<button onclick="window.deleteComment('${comment.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">删除</button>`;
             }
             commentsHtml += `
-                <div style="font-size:12px; margin-top:6px; padding-bottom:5px; display:flex; justify-content:space-between; align-items:center;">
+                <div style="font-size:12px; margin-top:3px; padding-bottom:2px; display:flex; justify-content:space-between; align-items:center;">
                     <div>
                         <b>${commentAuthor}:</b> ${comment.content} ${replyAction}
                     </div>
