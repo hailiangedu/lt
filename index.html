@@ -813,7 +813,7 @@ async function loadTopics(categoryId, page = 1) {
                 commentActions += `<button onclick="window.deleteComment('${comment.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">删除</button>`;
             }
             commentsHtml += `
-                <div style="font-size:12px; margin-top:6px; padding-bottom:4px; border-bottom:1px dashed var(--border-color); display:flex; justify-content:space-between; align-items:center;">
+                <div style="font-size:12px; margin-top:6px; padding-bottom:5px; display:flex; justify-content:space-between; align-items:center;">
                     <div>
                         <b>${commentAuthor}:</b> ${comment.content} ${replyAction}
                     </div>
@@ -844,6 +844,9 @@ async function loadTopics(categoryId, page = 1) {
         div.innerHTML = `
                 <h4 style="margin:0 0 6px 0;">${topic.title}</h4>
                 <p style="margin:0 0 8px 0; white-space: pre-wrap; font-size:13px;">${topic.content}</p>
+                
+                <hr style="border: none; border-top: 1px solid var(--border-color); margin: 8px 0; opacity: 0.5;">
+                
                 <div class="flex" style="margin-top:6px; margin-bottom:4px;">
                     <span style="font-size:11px; color:var(--meta-color);">
                         发布者：<b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${authorName}</b>${badge} &nbsp;|&nbsp; 发布于 ${new Date(topic.created_at).toLocaleString()}
