@@ -139,14 +139,12 @@ self.addEventListener('message', (event) => {
 });
 
 // 后台定时检查 Supabase 未读通知（实现真正的系统级后台通知）
-// 注意：Service Worker 在后台运行时可以通过 fetch 直接请求公开的 Supabase API
 setInterval(async () => {
   if (!activeUserId) return;
 
   try {
-    // 通过 Supabase REST API 直接查询未读通知
     const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW'; // 与 index.html 保持一致
+    const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
 
     const response = await fetch(
       `${SUPABASE_URL}/rest/v1/notifications?user_id=eq.${activeUserId}&is_read=eq.false&order=created_at.desc&limit=1`,
@@ -163,11 +161,9 @@ setInterval(async () => {
       if (notifications && notifications.length > 0) {
         const latest = notifications[0];
         
-        // 如果这是一条全新的未读通知（避免重复弹窗）
         if (latest.id !== lastCheckedNotificationId) {
           lastCheckedNotificationId = latest.id;
 
-          // 触发真正意义上的系统级桌面通知
           self.registration.showNotification(latest.title || '海高论坛', {
             body: latest.content || '您有一条新的论坛消息',
             icon: './icon.png',
@@ -179,17 +175,17 @@ setInterval(async () => {
     }
   } catch (err) {
     console.error('SW 后台检查通知出错:', err);
-  }, 30000); // 每 30 秒在后台检查一次
+  }
+}, 30000); // 每 30 秒在后台检查一次（此处正确闭合 setInterval）
 
 // 监听用户点击系统通知的行为
 self.addEventListener('notificationclick', (event) => {
-  event.notification.close(); // 关闭通知弹窗
+  event.notification.close();
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       const targetUrl = event.notification.data.url;
       
-      // 如果已经有打开的窗口，则聚焦
       for (const client of clientList) {
         if ('focus' in client) {
           client.focus();
@@ -200,7 +196,6 @@ self.addEventListener('notificationclick', (event) => {
         }
       }
       
-      // 如果网页完全关闭，则点击通知时自动唤起并打开论坛首页
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }
