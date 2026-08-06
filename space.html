@@ -185,92 +185,105 @@
             }
         });
 
-        // 2. Supabase 配置与基于心跳时间戳的在线判定逻辑
-        // 2. 复用全局 Supabase 实例与基于心跳时间戳的在线判定逻辑
-        const sbApp = window.sbApp;
-
+        // 2. 具备安全重试机制的初始化大厅逻辑
         async function initSpace() {
+            const container = document.getElementById('users-container');
+            
+            // 安全获取全局实例：若 window.sbApp 还没准备好，则每 100ms 轮询检查一次，防止死循环
+            const sbApp = window.sbApp || (window.supabase && window.supabase.createClient(
+                'https://snlikjcmuwkyibogfupy.supabase.co', 
+                'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW'
+            ));
+            window.sbApp = sbApp;
+
             if (!sbApp) {
                 setTimeout(initSpace, 100);
                 return;
             }
-            // 1. 鉴权检查，确保用户已登录
-            const { data: { session }, error: sessionError } = await sbApp.auth.getSession();
-            if (sessionError || !session) {
-                alert('请先登录论坛！');
-                window.location.href = 'index.html';
-                return;
-            }
-            const currentUser = session.user;
-            const container = document.getElementById('users-container');
 
-            // 2. 获取所有 profiles 数据（包含 last_seen_at 字段）
-            const { data: profiles, error } = await sbApp.from('profiles').select('*');
-            if (error) {
-                container.innerHTML = `<p style="color:red;">加载用户失败: ${error.message}</p>`;
-                return;
-            }
+            try {
+                // 1. 鉴权检查，确保用户已登录
+                const { data: { session }, error: sessionError } = await sbApp.auth.getSession();
+                if (sessionError || !session) {
+                    alert('请先登录论坛！');
+                    window.location.href = 'index.html';
+                    return;
+                }
+                const currentUser = session.user;
 
-            // 3. 渲染用户大厅与在线状态判定
-            const renderUsers = () => {
-                container.innerHTML = '';
-                if (!profiles || profiles.length === 0) {
-                    container.innerHTML = `<p style="color:var(--meta-color);">暂无用户档案记录</p>`;
+                // 2. 获取所有 profiles 数据（包含 last_seen_at 字段）
+                const { data: profiles, error } = await sbApp.from('profiles').select('*');
+                if (error) {
+                    container.innerHTML = `<p style="color:red;">加载用户失败: ${error.message}</p>`;
                     return;
                 }
 
-                const now = Date.now();
-                // 判定标准：如果最后心跳时间在 60 秒以内，则视为在线
-                const ONLINE_THRESHOLD = 60000;
-
-                profiles.forEach(user => {
-                    let isOnline = false;
-                    if (user.last_seen_at) {
-                        const lastSeenTime = new Date(user.last_seen_at).getTime();
-                        isOnline = (now - lastSeenTime) < ONLINE_THRESHOLD;
-                    }
-                    // 当前登录用户本身强制显示在线
-                    if (user.id === currentUser?.id) {
-                        isOnline = true;
+                // 3. 渲染用户大厅与在线状态判定
+                const renderUsers = () => {
+                    container.innerHTML = '';
+                    if (!profiles || profiles.length === 0) {
+                        container.innerHTML = `<p style="color:var(--meta-color);">暂无用户档案记录</p>`;
+                        return;
                     }
 
-                    const card = document.createElement('div');
-                    card.className = 'user-card';
-                    card.innerHTML = `
-                        <div class="user-info">
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <b style="font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${user.nickname || '未命名用户'}</b>
-                                ${user.is_admin ? '<span class="badge-admin">管理员</span>' : ''}
-                            </div>
-                            <div class="user-meta">
-                                <span>年级：${user.grade || '未填'}</span>
-                            </div>
-                        </div>
-                        <div style="font-size: 12px; display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
-                            <span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>
-                            <span style="color: ${isOnline ? 'var(--online-color)' : 'var(--meta-color)'}; font-weight: 500;">
-                                ${isOnline ? '在线' : '离线'}
-                            </span>
-                        </div>
-                    `;
-                    container.appendChild(card);
-                });
-            };
+                    const now = Date.now();
+                    const ONLINE_THRESHOLD = 60000; // 60秒内有心跳则视为在线
 
-            renderUsers();
+                    profiles.forEach(user => {
+                        let isOnline = false;
+                        if (user.last_seen_at) {
+                            const lastSeenTime = new Date(user.last_seen_at).getTime();
+                            isOnline = (now - lastSeenTime) < ONLINE_THRESHOLD;
+                        }
+                        if (user.id === currentUser?.id) {
+                            isOnline = true;
+                        }
 
-            // 4. 定时轮询拉取最新数据库状态（每 10 秒自动刷新一次大厅列表）
-            setInterval(async () => {
-                const { data: freshProfiles } = await sbApp.from('profiles').select('*');
-                if (freshProfiles) {
-                    profiles.length = 0;
-                    profiles.push(...freshProfiles);
-                    renderUsers();
-                }
-            }, 10000);
+                        const card = document.createElement('div');
+                        card.className = 'user-card';
+                        card.innerHTML = `
+                            <div class="user-info">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <b style="font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${user.nickname || '未命名用户'}</b>
+                                    ${user.is_admin ? '<span class="badge-admin">管理员</span>' : ''}
+                                </div>
+                                <div class="user-meta">
+                                    <span>年级：${user.grade || '未填'}</span>
+                                </div>
+                            </div>
+                            <div style="font-size: 12px; display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                                <span class="status-dot ${isOnline ? 'online' : 'offline'}"></span>
+                                <span style="color: ${isOnline ? 'var(--online-color)' : 'var(--meta-color)'}; font-weight: 500;">
+                                    ${isOnline ? '在线' : '离线'}
+                                </span>
+                            </div>
+                        `;
+                        container.appendChild(card);
+                    });
+                };
+
+                renderUsers();
+
+                // 4. 定时轮询拉取最新数据库状态（每 10 秒自动刷新一次大厅列表）
+                setInterval(async () => {
+                    const { data: freshProfiles } = await sbApp.from('profiles').select('*');
+                    if (freshProfiles) {
+                        profiles.length = 0;
+                        profiles.push(...freshProfiles);
+                        renderUsers();
+                    }
+                }, 10000);
+
+            } catch (err) {
+                console.error('初始化互动空间异常:', err);
+                container.innerHTML = `<p style="color:red;">加载异常，请检查网络或刷新页面</p>`;
+            }
         }
 
-        initSpace();
+        // 页面加载完成后自动触发
+        window.addEventListener('DOMContentLoaded', () => {
+            initSpace();
+        });
     </script>
 </body>
 </html>
