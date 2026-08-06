@@ -12,13 +12,5 @@
       "type": "image/png"
     }
   ]
-  
-  "shortcuts": [
-    {
-    "name": "查看用户列表",
-    "short_name": "查看用户",
-    "url": "./space.html"
-    }
-  ]
 
 }
