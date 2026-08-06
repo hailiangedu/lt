@@ -755,6 +755,7 @@ async function loadTopics(categoryId, isAppend = false) {
     if (!isAppend) {
       container.innerHTML = '';
     }
+    let topics;
     ({ data: topics, error } = await db.from('topics'))
         .select('*')
         .eq('category_id', categoryId)
@@ -889,7 +890,7 @@ async function loadTopics(categoryId, isAppend = false) {
 //装
 //逻
 //辑
-function renderTopicsList(topics, profileMap, commentMap, likedSet, favSet, likeCountMap, isAppend) {
+/*function renderTopicsList(topics, profileMap, commentMap, likedSet, favSet, likeCountMap, isAppend) {
   const container = document.getElementById('topics-container');
   
   // 如果不是追加加载，先清空容器
@@ -937,6 +938,7 @@ function renderTopicsList(topics, profileMap, commentMap, likedSet, favSet, like
     container.appendChild(div);
   });
 }
+*/
 // 点赞处理函数
 window.handleLike = async function(postId, btnElement) {
     if (!currentAuthUser) {
