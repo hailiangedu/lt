@@ -804,14 +804,6 @@ async function loadTopics(categoryId, page = 1) {
         });
     }
 
-    let fixedImageUrl = topic.image_url;
-    if (fixedImageUrl) {
-        // 如果包含了错误路径或旧域名，动态替换成正确的域名
-        fixedImageUrl = fixedImageUrl
-            .replace(/https?:\/\/[^\/]+\/undefined/, 'https://hgwall.cc.cd')
-            .replace('hglt.cc.cd', 'hgwall.cc.cd');
-    }
-
 // 之后用 fixedImageUrl 渲染 <img> 标签
 let imageHtml = fixedImageUrl ? `<img src="${fixedImageUrl}" style="max-width:100%;">` : '';
 
@@ -821,6 +813,14 @@ let imageHtml = fixedImageUrl ? `<img src="${fixedImageUrl}" style="max-width:10
     for (const topic of topics) {
         const div = document.createElement('div');
         div.className = 'card'; 
+
+        let fixedImageUrl = topic.image_url;
+        if (fixedImageUrl) {
+            // 如果包含了错误路径或旧域名，动态替换成正确的域名
+            fixedImageUrl = fixedImageUrl
+                .replace(/https?:\/\/[^\/]+\/undefined/, 'https://hgwall.cc.cd')
+                .replace('hglt.cc.cd', 'hgwall.cc.cd');
+        }
 
         const authorProfile = profileMap[topic.user_id];
         const authorName = authorProfile ? authorProfile.nickname : (topic.user_name || '匿名用户');
