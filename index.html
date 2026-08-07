@@ -1292,7 +1292,7 @@ window.createTopic = async function() {
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || '图片中转上传失败');
 
-                finalimageUrl = data.publicUrl; // 获取后端返回的 R2 图片外链
+                finalimageUrl = data.publicUrl || data.url;; // 获取后端返回的 R2 图片外链
                 
                 // 自动将图片以 Markdown 语法拼接到帖子内容后方
                 content += `\n\n![lt-image](${finalimageUrl})`;
@@ -1311,6 +1311,7 @@ window.createTopic = async function() {
         user_name: currentUserProfile.nickname || '匿名用户',
         title,
         content
+        image_url: finalimageUrl // 如果你的表结构有 image_url 字段，在这里存入 R2 链接
     });
 
     if (submitBtn) submitBtn.innerText = '发布话题';
