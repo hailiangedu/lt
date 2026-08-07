@@ -1280,7 +1280,7 @@ window.createTopic = async function() {
                 formData.append('file', selectedImageFile);
 
                 // 请求 Supabase Edge Function 中转上传
-                const res = await fetch('https://snlikjcmuwkyibogfupy.supabase.co/functions/v1/get-r2-upload-url', {
+                const res = await fetch('https://snlikjcmuwkyibogfupy.supabase.co/functions/v1/upload-r2', {
                     method: 'POST',
                     headers: { 
                         // 带上 Supabase 客户端自带的 Anon 公钥，解决 401 拦截
