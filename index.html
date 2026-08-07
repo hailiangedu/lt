@@ -858,7 +858,7 @@ async function loadTopics(categoryId, page = 1) {
             commentsHtml += `
                 <div style="font-size:12px; margin-top:3px; padding-bottom:2px; display:flex; justify-content:space-between; align-items:center;">
                     <div>
-                        <b>${commentAuthor}:</b> ${comment.content} ${timeHtml} ${replyAction}
+                        <span class="clickable-name" onclick="window.viewUserProfile('${comment.user_id}')">${commentAuthor}</span><b>:</b> ${comment.content} ${timeHtml} ${replyAction}
                     </div>
                     <div style="flex-shrink:0;">
                         ${commentActions}
