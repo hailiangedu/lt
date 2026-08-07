@@ -41,6 +41,11 @@ self.addEventListener('fetch', event => {
     // 仅处理 http/https 请求
     if (!event.request.url.startsWith('http')) return;
 
+    // 直接放行对 Supabase 边缘函数或其他外部 API 的请求，避免被缓存逻辑干扰
+    if (event.request.url.includes('supabase.co')) {
+        return;
+    }
+    
     event.respondWith(
         fetch(event.request)
             .then(networkResponse => {
@@ -63,6 +68,11 @@ self.addEventListener('fetch', event => {
                     if (event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html')) {
                         return caches.match('./index.html');
                     }
+
+                    return new Response('Network error or resource not found', {
+                        status: 404,
+                        statusText: 'Not Found'
+                    });
                 });
             })
     );
