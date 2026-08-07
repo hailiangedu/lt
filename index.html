@@ -1267,7 +1267,7 @@ window.createTopic = async function() {
         return;
     }
 
-    let imageUrl = '';
+    let finalimageUrl = '';
     const submitBtn = document.getElementById('post-submit-btn');
 
     // 1. 如果用户选择了图片，通过 FormData 提交给 Supabase 边缘函数中转上传至 R2
@@ -1292,10 +1292,10 @@ window.createTopic = async function() {
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || '图片中转上传失败');
 
-                imageUrl = data.publicUrl; // 获取后端返回的 R2 图片外链
+                finalimageUrl = data.publicUrl; // 获取后端返回的 R2 图片外链
                 
                 // 自动将图片以 Markdown 语法拼接到帖子内容后方
-                content += `\n\n![lt-image](${imageUrl})`;
+                content += `\n\n![lt-image](${finalimageUrl})`;
             } catch (err) {
                 alert('图片上传出错: ' + err.message);
                 if (submitBtn) submitBtn.innerText = '发布话题';
