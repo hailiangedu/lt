@@ -1278,7 +1278,11 @@ window.createTopic = async function() {
             // 请求 Supabase Edge Function 生成上传签名
             const res = await fetch('https://snlikjcmuwkyibogfupy.supabase.co/functions/v1/get-r2-upload-url', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    // 核心修改：带上 Supabase 客户端自带的 Anon 公钥，解决 401 拦截
+                    'Authorization': `Bearer ${db.supabaseKey}`
+                },
                 body: JSON.stringify({ 
                     fileName: selectedImageFile.name, 
                     fileType: selectedImageFile.type 
