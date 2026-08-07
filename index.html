@@ -151,6 +151,7 @@ button:hover { opacity: 0.9; }
                     <input type="file" id="topic-image-file" accept="image/*" style="display: none;" onchange="window.handleImageSelect(this)">
                     <!-- 自定义的 “+” 图片上传按钮（位于发布按钮右侧） -->
                     <button type="button" onclick="document.getElementById('topic-image-file').click()" title="上传图片" style="background-color: #718096; padding: 4px 5px; font-size: 16px; line-height: 1;">+</button> 
+                    <div id="image-preview-container" style="font-size: 12px; color: var(--meta-color); margin-top: 6px;"></div>
                 </div> 
                 <div id="topics-container"></div> 
                 <div id="pagination-controls" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">
