@@ -805,7 +805,20 @@ async function loadTopics(categoryId, page = 1) {
             const isCommentOwner = currentAuthUser && currentAuthUser.id === comment.user_id;
             const isCommentAdmin = currentUserProfile && currentUserProfile.is_admin;
             const canDeleteComment = isCommentOwner || isCommentAdmin;
-
+            // --- 新增：处理评论时间 ---
+            let timeString = '';
+            if (comment.created_at) {
+                const date = new Date(comment.created_at);
+                // 可以根据需求调整时间的展示格式（这里展示为 年-月-日 时:分）
+                const year = date.getFullYear();
+                const month = String(date.getMonth + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                timeString = `${year}-${month}-${day} ${hours}:${minutes}`;
+            }
+            const timeHtml = timeString ? `<span style="color:#718096; font-size:10px; margin-left:6px;">${timeString}</span>` : '';
+            // ---------------------------
             let replyAction = `<button onclick="window.replyToUser('${topic.id}', \`${commentAuthor}\`)" style="background:transparent; color:var(--primary-color, #3182ce); border:none; font-weight: normal; font-size:9px; cursor:pointer; padding:0 4px; margin-left:6px;">回复</button>`;
 
             let commentActions = '';
@@ -815,7 +828,7 @@ async function loadTopics(categoryId, page = 1) {
             commentsHtml += `
                 <div style="font-size:12px; margin-top:3px; padding-bottom:2px; display:flex; justify-content:space-between; align-items:center;">
                     <div>
-                        <b>${commentAuthor}:</b> ${comment.content} ${replyAction}
+                        <b>${commentAuthor}:</b> ${comment.content} ${timeHtml} ${replyAction}
                     </div>
                     <div style="flex-shrink:0;">
                         ${commentActions}
