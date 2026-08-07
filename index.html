@@ -1270,46 +1270,38 @@ window.createTopic = async function() {
     let imageUrl = '';
     const submitBtn = document.getElementById('post-submit-btn');
 
-    // 1. 如果用户选择了图片，先通过 Edge Function 获取直传凭证并上传至 R2
-    if (selectedImageFile) {
-        try {
-            if (submitBtn) submitBtn.innerText = '上传图片中...';
+    // 1. 如果用户选择了图片，通过 FormData 提交给 Supabase 边缘函数中转上传至 R2
+        if (selectedImageFile) {
+            try {
+                if (submitBtn) submitBtn.innerText = '上传图片中...';
+                
+                // 构造 FormData
+                const formData = new FormData();
+                formData.append('file', selectedImageFile);
 
-            // 请求 Supabase Edge Function 生成上传签名
-            const res = await fetch('https://snlikjcmuwkyibogfupy.supabase.co/functions/v1/get-r2-upload-url', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    // 核心修改：带上 Supabase 客户端自带的 Anon 公钥，解决 401 拦截
-                    'Authorization': `Bearer ${db.supabaseKey}`
-                },
-                body: JSON.stringify({ 
-                    fileName: selectedImageFile.name, 
-                    fileType: selectedImageFile.type 
-                })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || '获取上传凭证失败');
+                // 请求 Supabase Edge Function 中转上传
+                const res = await fetch('https://snlikjcmuwkyibogfupy.supabase.co/functions/v1/get-r2-upload-url', {
+                    method: 'POST',
+                    headers: { 
+                        // 带上 Supabase 客户端自带的 Anon 公钥，解决 401 拦截
+                        'Authorization': `Bearer ${db.supabaseKey}` 
+                    },
+                    body: formData
+                });
 
-            // 浏览器直接使用 PUT 方法将图片文件直传到 Cloudflare R2
-            const uploadRes = await fetch(data.uploadUrl, {
-                method: 'PUT',
-                headers: { 'Content-Type': selectedImageFile.type },
-                body: selectedImageFile
-            });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || '图片中转上传失败');
 
-            if (!uploadRes.ok) throw new Error('图片直传 R2 失败');
-            imageUrl = data.publicUrl;
-
-            // 自动将图片以 Markdown 语法拼接到帖子内容后方
-            content += `\n\n![lt-image](${imageUrl})`;
-
-        } catch (err) {
-            alert('图片上传出错: ' + err.message);
-            if (submitBtn) submitBtn.innerText = '发布话题';
-            return;
+                imageUrl = data.publicUrl; // 获取后端返回的 R2 图片外链
+                
+                // 自动将图片以 Markdown 语法拼接到帖子内容后方
+                content += `\n\n![lt-image](${imageUrl})`;
+            } catch (err) {
+                alert('图片上传出错: ' + err.message);
+                if (submitBtn) submitBtn.innerText = '发布话题';
+                return;
+            }
         }
-    }
 
     if (submitBtn) submitBtn.innerText = '发布中...';
     
