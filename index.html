@@ -150,7 +150,7 @@ button:hover { opacity: 0.9; }
                     <!-- 隐藏的真实文件选择框 -->
                     <input type="file" id="topic-image-file" accept="image/*" style="display: none;" onchange="window.handleImageSelect(this)">
                     <!-- 自定义的 “+” 图片上传按钮（位于发布按钮右侧） -->
-                    <button type="button" onclick="document.getElementById('topic-image-file').click()" title="上传图片" style="background-color: #718096; padding: 10px 14px; font-size: 16px; line-height: 1;">+</button> 
+                    <button type="button" onclick="document.getElementById('topic-image-file').click()" title="上传图片" style="background-color: #718096; padding: 14px 16px; font-size: 16px; line-height: 1;">+</button> 
                 </div> 
                 <div id="topics-container"></div> 
                 <div id="pagination-controls" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 15px;">
@@ -272,6 +272,20 @@ function initCustomBackground() {
     }
 }
 initCustomBackground();
+
+// 用于暂存用户选择的图片文件
+let selectedImageFile = null;
+
+// 用户点击 “+” 按钮选择文件后的回调
+window.handleImageSelect = function(input) {
+    if (input.files && input.files[0]) {
+        selectedImageFile = input.files[0];
+        const previewEl = document.getElementById('image-preview-container');
+        if (previewEl) {
+            previewEl.innerHTML = `已选择图片: <span style="color: var(--primary-color);">${selectedImageFile.name}</span>`;
+        }
+    }
+};
 
 // 切换发表新话题 / 发布通知栏目（管理员专属）
 window.togglePostMode = function() {
@@ -1251,6 +1265,48 @@ window.createTopic = async function() {
         alert('请先选择一个讨论板块！');
         return;
     }
+
+    let imageUrl = '';
+    const submitBtn = document.getElementById('post-submit-btn');
+
+    // 1. 如果用户选择了图片，先通过 Edge Function 获取直传凭证并上传至 R2
+    if (selectedImageFile) {
+        try {
+            if (submitBtn) submitBtn.innerText = '上传图片中...';
+
+            // 请求 Supabase Edge Function 生成上传签名
+            const res = await fetch('https://snlikjcmuwkyibogfupy.supabase.co/functions/v1/get-r2-upload-url', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    fileName: selectedImageFile.name, 
+                    fileType: selectedImageFile.type 
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || '获取上传凭证失败');
+
+            // 浏览器直接使用 PUT 方法将图片文件直传到 Cloudflare R2
+            const uploadRes = await fetch(data.uploadUrl, {
+                method: 'PUT',
+                headers: { 'Content-Type': selectedImageFile.type },
+                body: selectedImageFile
+            });
+
+            if (!uploadRes.ok) throw new Error('图片直传 R2 失败');
+            imageUrl = data.publicUrl;
+
+            // 自动将图片以 Markdown 语法拼接到帖子内容后方
+            content += `\n\n![lt-image](${imageUrl})`;
+
+        } catch (err) {
+            alert('图片上传出错: ' + err.message);
+            if (submitBtn) submitBtn.innerText = '发布话题';
+            return;
+        }
+    }
+
+    if (submitBtn) submitBtn.innerText = '发布中...';
     
     const { error } = await db.from('topics').insert({
         category_id: currentCategoryId,
@@ -1260,11 +1316,21 @@ window.createTopic = async function() {
         content
     });
 
+    if (submitBtn) submitBtn.innerText = '发布话题';
+
     if (error) {
         alert('发布失败: ' + error.message);
     } else {
         document.getElementById('topic-title').value = '';
         document.getElementById('topic-content').value = '';
+
+        const fileInput = document.getElementById('topic-image-file');
+        if (fileInput) fileInput.value = '';
+        selectedImageFile = null;
+
+        const previewEl = document.getElementById('image-preview-container');
+        if (previewEl) previewEl.innerHTML = '';
+        
         loadTopics(currentCategoryId);
     }
 };
