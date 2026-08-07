@@ -1264,7 +1264,66 @@ window.handleFavorite = async function(postId, btnElement) {
         }
     }
 };
-   
+
+// 压缩图片的辅助函数（限制最大宽度/高度和文件大小）
+function compressImage(file, maxWidth = 1200, maxHeight = 1200, quality = 0.8) {
+    return new Promise((resolve, reject) => {
+        // 如果不是图片文件，直接返回原文件
+        if (!file.type.startsWith('image/')) {
+            resolve(file);
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                let width = img.width;
+                let height = img.height;
+
+                // 等比例缩放计算
+                if (width > maxWidth || height > maxHeight) {
+                    if (width / height > maxWidth / maxHeight) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    } else {
+                        width = Math.round((width * maxHeight) / height);
+                        height = maxHeight;
+                    }
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // 导出为 Blob / File
+                canvas.toBlob(
+                    (blob) => {
+                        if (!blob) {
+                            reject(new Error('图片压缩失败'));
+                            return;
+                        }
+                        // 保持原文件名和类型（如果是 PNG，也可以转成 JPEG 以获得更好压缩率）
+                        const compressedFile = new File([blob], file.name, {
+                            type: file.type,
+                            lastModified: Date.now(),
+                        });
+                        resolve(compressedFile);
+                    },
+                    file.type,
+                    quality // 压缩质量 (0 ~ 1)
+                );
+            };
+            img.onerror = (error) => reject(error);
+        };
+        reader.onerror = (error) => reject(error);
+    });
+}
+    
 window.replyToUser = function(topicId, authorName) {
     const input = document.getElementById(`comment-input-${topicId}`);
     if (input) {
@@ -1291,11 +1350,21 @@ window.createTopic = async function() {
     // 1. 如果用户选择了图片，通过 FormData 提交给 Supabase 边缘函数中转上传至 R2
         if (selectedImageFile) {
             try {
-                if (submitBtn) submitBtn.innerText = '上传图片中...';
+
+                let fileToUpload = selectedImageFile;
+
+                // 例如：如果图片大小超过 500KB，才执行压缩（500 * 1024 字节）
+                if (selectedImageFile.size > 500 * 1024) {
+                    if (submitBtn) submitBtn.innerText = '正在压缩图片...';
+                    fileToUpload = await compressImage(selectedImageFile, 1200, 1200, 0.8);
+                }
                 
+                //const compressedFile = await compressImage(selectedImageFile, 1200, 1200, 0.8);
+
+                if (submitBtn) submitBtn.innerText = '上传图片中...';
                 // 构造 FormData
                 const formData = new FormData();
-                formData.append('file', selectedImageFile);
+                formData.append('file', fileToUpload);
 
                 // 请求 Supabase Edge Function 中转上传
                 const res = await fetch('https://snlikjcmuwkyibogfupy.supabase.co/functions/v1/upload-r2', {
