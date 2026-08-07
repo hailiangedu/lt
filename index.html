@@ -804,9 +804,6 @@ async function loadTopics(categoryId, page = 1) {
         });
     }
 
-// 之后用 fixedImageUrl 渲染 <img> 标签
-let imageHtml = fixedImageUrl ? `<img src="${fixedImageUrl}" style="max-width:100%;">` : '';
-
     // 7. 清空容器并开始循环渲染当前页的帖子
     container.innerHTML = ''; 
     
@@ -821,6 +818,8 @@ let imageHtml = fixedImageUrl ? `<img src="${fixedImageUrl}" style="max-width:10
                 .replace(/https?:\/\/[^\/]+\/undefined/, 'https://hgwall.cc.cd')
                 .replace('hglt.cc.cd', 'hgwall.cc.cd');
         }
+        // 之后用 fixedImageUrl 渲染 <img> 标签
+        let imageHtml = fixedImageUrl ? `<img src="${fixedImageUrl}" style="max-width:100%;">` : '';
 
         const authorProfile = profileMap[topic.user_id];
         const authorName = authorProfile ? authorProfile.nickname : (topic.user_name || '匿名用户');
