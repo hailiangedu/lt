@@ -874,9 +874,17 @@ async function loadTopics(categoryId, page = 1) {
         if (isUserAdmin) {
             ownerActions += `<button onclick="window.warnUser('${topic.user_id}', '${topic.id}')" style="background:transparent; color:#c53030; border:none; font-size:11px; cursor:pointer; padding:0 4px;">警告</button>`;
         }
+        let imageHtml = '';
+        if (topic.image_url && topic.image_url.trim() !== '') {
+            imageHtml = `<div style="margin-top: 8px; margin-bottom: 8px;">
+                            <img src="${topic.image_url}" alt="帖子图片" style="max-width: 100%; max-height: 400px; border-radius: 6px; display: block; object-fit: contain;">
+                         </div>`;
+        }
         div.innerHTML = `
                 <h4 style="margin:0 0 6px 0;">${topic.title}</h4>
                 <p style="margin:0 0 8px 0; white-space: pre-wrap; font-size:13px;">${topic.content}</p>
+                
+                ${imageHtml}
                 
                 <div class="flex" style="margin-top:6px; margin-bottom:4px;">
                     <span style="font-size:11px; color:var(--meta-color);">
@@ -1295,7 +1303,7 @@ window.createTopic = async function() {
                 finalimageUrl = data.publicUrl || data.url;; // 获取后端返回的 R2 图片外链
                 
                 // 自动将图片以 Markdown 语法拼接到帖子内容后方
-                content += `\n\n![lt-image](${finalimageUrl})`;
+                //content += `\n\n![lt-image](${finalimageUrl})`;
             } catch (err) {
                 alert('图片上传出错: ' + err.message);
                 if (submitBtn) submitBtn.innerText = '发布话题';
