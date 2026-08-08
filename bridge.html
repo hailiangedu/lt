@@ -3,11 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>个人信息桥接中心 - 海高论坛</title>
+    <title>个人信息展示中心 - 海高论坛</title>
     <link rel="icon" type="image/png" href="./image.png">
-    <!-- PWA 应用清单 -->
     <link rel="manifest" href="manifest.json">
-    <!-- 引入 Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
@@ -37,10 +35,11 @@
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
         }
         .flex { display: flex; justify-content: space-between; align-items: center; }
-        input, select {
+        .info-value {
             width: 100%; padding: 10px; margin-bottom: 10px;
             background: var(--card-bg); color: var(--text-color);
             border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box;
+            font-size: 14px; line-height: 1.5;
         }
         button {
             background-color: var(--primary-color); color: white; border: none;
@@ -56,35 +55,29 @@
             border: 3px solid var(--primary-color); box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             background-color: #fff;
         }
-        .avatar-upload-label {
-            display: inline-block; margin-top: 8px; font-size: 12px;
-            background: #4a5568; color: white; padding: 5px 12px; border-radius: 4px; cursor: pointer;
-        }
         .level-badge {
             display: inline-block; background: #3182ce; color: white;
-            font-size: 12px; padding: 3px 10px; border-radius: 12px; font-weight: bold; margin-bottom: 10px;
+            font-size: 13px; padding: 4px 12px; border-radius: 12px; font-weight: bold; margin-bottom: 10px;
         }
+        .privacy-tag {
+            font-size: 11px; padding: 2px 6px; border-radius: 4px; background: #e2e8f0; color: #4a5568; flex-shrink: 0;
+        }
+        [data-theme="dark"] .privacy-tag { background: #4a5568; color: #cbd5e0; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <div class="card flex" style="padding: 15px 25px;">
-        <h2 style="margin:0;">个人信息桥接中心</h2>
+        <h2 style="margin:0;">个人信息展示中心</h2>
         <button onclick="window.location.href='index.html'" style="background:#718096;">返回论坛</button>
     </div>
 
     <div class="card">
-        <!-- 头像显示与上传区域 (默认为 icon.png) -->
+        <!-- 头像展示区域 (默认为 icon.png 或用户自定义头像) -->
         <div class="avatar-container">
             <img id="user-avatar" src="icon.png" alt="用户头像" class="avatar-img">
-            <div>
-                <label class="avatar-upload-label">
-                    更换头像
-                    <input type="file" id="avatar-file-input" accept="image/*" style="display: none;" onchange="handleAvatarUpload(this)">
-                </label>
-            </div>
-            <div id="avatar-msg" style="font-size: 11px; color: var(--meta-color); margin-top: 5px;"></div>
+            <div id="user-nickname-title" style="font-weight: bold; font-size: 18px; margin-top: 10px;">加载中...</div>
         </div>
 
         <div style="text-align: center; margin-bottom: 15px;">
@@ -94,73 +87,60 @@
         <h3>账号与基本资料</h3>
         <div class="profile-row">
             <label>绑定邮箱：</label>
-            <input type="text" id="p-email" disabled style="margin-bottom:0;">
+            <div id="p-email" class="info-value" style="margin-bottom:0;">-</div>
         </div>
         <div class="profile-row">
             <label>当前身份：</label>
-            <input type="text" id="p-role" disabled style="margin-bottom:0;">
+            <div id="p-role" class="info-value" style="margin-bottom:0;">-</div>
         </div>
         <div class="profile-row">
-            <label><span style="color:red;">*</span> 年级：</label>
-            <select id="p-grade" style="margin-bottom:0;">
-                <option value="毕业">毕业</option>
-                <option value="高三">高三</option>
-                <option value="高二">高二</option>
-                <option value="高一">高一</option>
-                <option value="英才">英才</option>
-            </select>
+            <label>年级：</label>
+            <div id="p-grade" class="info-value" style="margin-bottom:0;">-</div>
         </div>
 
         <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
 
-        <h3>详细个人档案 (及公开状态)</h3>
-        <div class="profile-row">
-            <label>昵称：</label>
-            <input type="text" id="p-nickname" style="margin-bottom:0;">
-        </div>
+        <h3>详细个人档案与公开状态</h3>
         <div class="profile-row">
             <label>真实姓名：</label>
-            <input type="text" id="p-real-name" style="margin-bottom:0;">
-            <label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-real-name"> 公开</label>
+            <div id="p-real-name" class="info-value" style="margin-bottom:0;">-</div>
+            <span id="tag-real-name" class="privacy-tag">状态</span>
         </div>
         <div class="profile-row">
             <label>手机号：</label>
-            <input type="text" id="p-phone" style="margin-bottom:0;">
-            <label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-phone"> 公开</label>
+            <div id="p-phone" class="info-value" style="margin-bottom:0;">-</div>
+            <span id="tag-phone" class="privacy-tag">状态</span>
         </div>
         <div class="profile-row">
             <label>性别：</label>
-            <input type="text" id="p-gender" placeholder="如: 男/女" style="margin-bottom:0;">
-            <label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-gender" checked> 公开</label>
+            <div id="p-gender" class="info-value" style="margin-bottom:0;">-</div>
+            <span id="tag-gender" class="privacy-tag">状态</span>
         </div>
         <div class="profile-row">
             <label>年龄：</label>
-            <input type="number" id="p-age" style="margin-bottom:0;">
-            <label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-age" checked> 公开</label>
+            <div id="p-age" class="info-value" style="margin-bottom:0;">-</div>
+            <span id="tag-age" class="privacy-tag">状态</span>
         </div>
         <div class="profile-row">
             <label>生日：</label>
-            <input type="text" id="p-birthday" placeholder="如: 05-20" style="margin-bottom:0;">
-            <label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-birthday" checked> 公开</label>
+            <div id="p-birthday" class="info-value" style="margin-bottom:0;">-</div>
+            <span id="tag-birthday" class="privacy-tag">状态</span>
         </div>
         <div class="profile-row">
             <label>星座：</label>
-            <input type="text" id="p-constellation" placeholder="如: 金牛座" style="margin-bottom:0;">
-            <label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-constellation" checked> 公开</label>
+            <div id="p-constellation" class="info-value" style="margin-bottom:0;">-</div>
+            <span id="tag-constellation" class="privacy-tag">状态</span>
         </div>
         <div class="profile-row">
             <label>故乡：</label>
-            <input type="text" id="p-hometown" placeholder="如: 北京" style="margin-bottom:0;">
-            <label style="width:auto; font-size:11px;"><input type="checkbox" id="pub-hometown" checked> 公开</label>
+            <div id="p-hometown" class="info-value" style="margin-bottom:0;">-</div>
+            <span id="tag-hometown" class="privacy-tag">状态</span>
         </div>
-
-        <button onclick="saveBridgeProfile()" style="margin-top: 15px; width: 100%;">保存并更新所有个人信息</button>
-        <p id="bridge-msg" style="color: green; font-size: 13px; margin: 10px 0; text-align:center;"></p>
     </div>
 </div>
 
 <script>
-    // 1. 初始化主题与自定义背景（完全参考 space.html 实现逻辑）
+    // 1. 初始化主题与背景跟随逻辑
     function initThemeAndBg() {
         const savedTheme = localStorage.getItem('forum_theme');
         if (savedTheme === 'dark') {
@@ -180,7 +160,6 @@
     }
     initThemeAndBg();
 
-    // 监听多标签页或主页动态切换背景和主题事件
     window.addEventListener('storage', (event) => {
         if (event.key === 'forum_theme') {
             if (event.newValue === 'dark') {
@@ -197,9 +176,8 @@
         }
     });
 
-    // 2. 初始化 Supabase 实例与加载用户资料
+    // 2. 初始化 Supabase 并加载用户个人信息进行纯展示渲染
     const db = window.sbApp || window.supabase.createClient('https://snlikjcmuwkyibogfupy.supabase.co', 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW');
-    let currentUser = null;
 
     async function initBridgePage() {
         const { data: { session } } = await db.auth.getSession();
@@ -208,100 +186,51 @@
             window.location.href = 'index.html';
             return;
         }
-        currentUser = session.user;
-        loadUserProfileData(currentUser.id);
+        const currentUser = session.user;
+        loadUserProfileData(currentUser);
     }
 
-    async function loadUserProfileData(userId) {
-        const { data, error } = await db.from('profiles').select('*').eq('id', userId).single();
-        if (error || !data) return;
+    async function loadUserProfileData(user) {
+        const { data, error } = await db.from('profiles').select('*').eq('id', user.id).single();
+        if (error || !data) {
+            console.error('获取个人信息失败', error);
+            return;
+        }
 
-        document.getElementById('p-email').value = currentUser.email;
-        document.getElementById('p-role').value = data.is_admin ? '管理员' : '普通成员';
-        document.getElementById('p-grade').value = data.grade || '高一';
-        document.getElementById('p-nickname').value = data.nickname || '';
+        // 基础信息与头像
+        document.getElementById('p-email').innerText = user.email || '未绑定';
+        document.getElementById('p-role').innerText = data.is_admin ? '管理员' : '普通成员';
+        document.getElementById('p-grade').innerText = data.grade || '未设置';
+        
+        const nickname = data.nickname || '无昵称';
+        document.getElementById('user-nickname-title').innerText = nickname;
 
-        // 等级与经验
+        // 等级与经验展示
         const exp = data.exp || 0;
         const level = data.level || 1;
         document.getElementById('user-level-tag').innerText = `Lv.${level} (当前经验: ${exp})`;
 
-        // 头像展示：若没有自定义头像则默认使用 icon.png
-        const avatarImg = document.getElementById('user-avatar');
-        avatarImg.src = data.avatar_url || 'icon.png';
+        // 头像展示：若没有上传则显示 icon.png
+        document.getElementById('user-avatar').src = data.avatar_url || 'icon.png';
 
-        // 填充详细字段与公开状态
+        // 详细档案字段与公开状态渲染
         const fields = ['real_name', 'phone', 'gender', 'age', 'birthday', 'constellation', 'hometown'];
         fields.forEach(field => {
-            const inputEl = document.getElementById(`p-${field.replace('_', '-')}`);
-            if (inputEl) inputEl.value = data[field] || '';
-            const pubCheckbox = document.getElementById(`pub-${field.replace('_', '-')}`);
-            if (pubCheckbox) {
-                pubCheckbox.checked = data[`pub_${field}`] !== false;
+            const val = data[field];
+            const isPublic = data[`pub_${field}`] !== false; // 默认公开
+            
+            const valEl = document.getElementById(`p-${field.replace('_', '-')}`);
+            const tagEl = document.getElementById(`tag-${field.replace('_', '-')}`);
+
+            if (valEl) {
+                valEl.innerText = (val !== null && val !== undefined && val !== '') ? val : '未填写';
+            }
+            if (tagEl) {
+                tagEl.innerText = isPublic ? '公开' : '私密';
+                tagEl.style.background = isPublic ? '#c6f6d5' : '#fed7d7';
+                tagEl.style.color = isPublic ? '#22543d' : '#742a2a';
             }
         });
-    }
-
-    // 头像上传处理（支持本地预览、Base64 转换并实时同步到 Supabase）
-    window.handleAvatarUpload = function(input) {
-        if (input.files && input.files[0]) {
-            const file = input.files[0];
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                const base64Img = e.target.result;
-                document.getElementById('user-avatar').src = base64Img;
-                
-                const { error } = await db.from('profiles').update({
-                    avatar_url: base64Img
-                }).eq('id', currentUser.id);
-
-                const msgEl = document.getElementById('avatar-msg');
-                if (error) {
-                    msgEl.style.color = 'red';
-                    msgEl.innerText = '头像更新到云端失败: ' + error.message;
-                } else {
-                    msgEl.style.color = 'green';
-                    msgEl.innerText = '头像已成功更新并保存！';
-                }
-            };
-            reader.readAsDataURL(file);
-        }
-    }
-
-    // 保存所有修改
-    window.saveBridgeProfile = async function() {
-        if (!currentUser) return;
-
-        const updateData = {
-            grade: document.getElementById('p-grade').value,
-            nickname: document.getElementById('p-nickname').value.trim(),
-            real_name: document.getElementById('p-real-name').value.trim(),
-            pub_real_name: document.getElementById('pub-real-name').checked,
-            phone: document.getElementById('p-phone').value.trim(),
-            pub_phone: document.getElementById('pub-phone').checked,
-            gender: document.getElementById('p-gender').value.trim(),
-            pub_gender: document.getElementById('pub-gender').checked,
-            age: document.getElementById('p-age').value ? parseInt(document.getElementById('p-age').value) : null,
-            pub_age: document.getElementById('pub-age').checked,
-            birthday: document.getElementById('p-birthday').value.trim(),
-            pub_birthday: document.getElementById('pub-birthday').checked,
-            constellation: document.getElementById('p-constellation').value.trim(),
-            pub_constellation: document.getElementById('pub-constellation').checked,
-            hometown: document.getElementById('p-hometown').value.trim(),
-            pub_hometown: document.getElementById('pub-hometown').checked
-        };
-
-        const { error } = await db.from('profiles').update(updateData).eq('id', currentUser.id);
-        const msgEl = document.getElementById('bridge-msg');
-        
-        if (error) {
-            msgEl.style.color = 'red';
-            msgEl.innerText = '保存失败: ' + error.message;
-        } else {
-            msgEl.style.color = 'green';
-            msgEl.innerText = '✅ 个人信息与权限设置已成功同步保存！';
-            setTimeout(() => { msgEl.innerText = ''; }, 3000);
-        }
     }
 
     initBridgePage();
