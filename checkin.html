@@ -307,13 +307,12 @@
             }
 
             const userId = session.user.id;
-            const todayStr = getTodayString();
             const btn = document.getElementById('checkin-btn');
             btn.disabled = true;
 
+            // 直接调用后端 RPC（日期由后端通过 SQL 统一生成，保证绝对准确）
             const { data, error } = await client.rpc('perform_checkin', {
-                p_user_id: userId,
-                p_date: todayStr
+                p_user_id: userId
             });
 
             if (error) {
