@@ -225,12 +225,9 @@
         });
 
         // 2. Supabase 签到及排行榜逻辑
-        const sbApp = window.sbApp;
-
         // 获取当前 UTC+8 的日期字符串 (YYYY-MM-DD)
         function getTodayString() {
             const now = new Date();
-            // 转换为 UTC+8
             const utc8Date = new Date(now.getTime() + (8 * 60 - now.getTimezoneOffset()) * 60000);
             return utc8Date.toISOString().split('T')[0];
         }
@@ -266,7 +263,7 @@
             }
         }
 
-        // 执行签到
+        // 执行签到（调用 Supabase 后端 RPC 函数处理安全性与并发加锁）
         async function handleCheckIn() {
             const { data: { session } } = await window.db.auth.getSession();
             if (!session) {
@@ -280,64 +277,26 @@
             const btn = document.getElementById('checkin-btn');
             btn.disabled = true;
 
-            // 1. 检查今天已签到人数，决定当前名次以计算额外经验
-            // （按照签到时间升序排列获取当前已签到总数）
-            const { count, error: countErr } = await window.db
-                .from('checkins')
-                .select('*', { count: 'exact', head: true })
-                .eq('checkin_date', todayStr);
+            // 调用后端 SQL 函数 perform_checkin
+            const { data, error } = await window.db.rpc('perform_checkin', {
+                p_user_id: userId,
+                p_date: todayStr
+            });
 
-            if (countErr) {
-                alert('签到失败，请稍后重试');
+            if (error) {
+                alert('签到失败: ' + error.message);
                 btn.disabled = false;
                 return;
             }
 
-            const currentRank = (count || 0) + 1;
-            let bonusExp = 0;
-            if (currentRank === 1) bonusExp = 5;
-            else if (currentRank === 2) bonusExp = 4;
-            else if (currentRank === 3) bonusExp = 3;
-
-            // 2. 写入数据库 checkins 表
-            const { error: insertErr } = await window.db
-                .from('checkins')
-                .insert([{
-                    user_id: userId,
-                    checkin_date: todayStr,
-                    rank: currentRank,
-                    bonus_exp: bonusExp
-                }]);
-
-            if (insertErr) {
-                if (insertErr.code === '23505') { // 唯一约束冲突（防止重复点击并发）
-                    alert('您今天已经签到过了！');
-                } else {
-                    alert('签到失败: ' + insertErr.message);
-                    btn.disabled = false;
-                }
-                return;
+            if (data && data.success) {
+                alert(`签到成功！你是今天的第 ${data.rank} 位签到者，获得奖励经验 +${data.bonus_exp}`);
+                btn.innerText = '今日已签到';
+                loadRankings();
+            } else {
+                alert(data.message || '签到失败');
+                btn.innerText = '今日已签到';
             }
-
-            // 3. 更新用户 profiles 表的经验值
-            if (bonusExp > 0) {
-                // 获取当前经验并加上奖励
-                const { data: profile } = await window.db
-                    .from('profiles')
-                    .select('exp')
-                    .eq('id', userId)
-                    .single();
-                
-                const currentExp = profile && profile.exp ? profile.exp : 0;
-                await window.db
-                    .from('profiles')
-                    .update({ exp: currentExp + bonusExp })
-                    .eq('id', userId);
-            }
-
-            alert(`签到成功！你是今天的第 ${currentRank} 位签到者，获得奖励经验 +${bonusExp}`);
-            btn.innerText = '今日已签到';
-            loadRankings();
         }
 
         // 加载今日排行榜
@@ -345,7 +304,6 @@
             const todayStr = getTodayString();
             const rankListEl = document.getElementById('rank-list');
 
-            // 联合查询 checkins 与 profiles 获取昵称
             const { data, error } = await window.db
                 .from('checkins')
                 .select(`
