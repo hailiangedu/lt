@@ -1,6 +1,7 @@
 const CACHE_NAME = 'hailiang-forum-v2';
 const assetsToCache = [
     './index.html',
+    './bridge.html',
     './confirm.html',
     './feedback.html',
     './space.html',
