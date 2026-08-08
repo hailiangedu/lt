@@ -41,7 +41,7 @@
             min-height: 100vh;
         }
         .container {
-            max-width: 1050px; /* 进一步加宽容器以容纳三列大屏展示 */
+            max-width: 1050px;
             margin: 0 auto;
         }
         .card {
@@ -89,7 +89,6 @@
             color: var(--meta-color);
             flex-shrink: 0;
         }
-        /* 档案网格：超宽屏三列，中屏双列，小屏单列 */
         .profile-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -104,6 +103,34 @@
             .profile-grid {
                 grid-template-columns: 1fr;
             }
+        }
+        /* 功能集成区网格按钮 */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 12px;
+            margin-top: 15px;
+        }
+        .feature-btn {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 12px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+        .feature-btn:hover {
+            background-color: var(--hover-bg);
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
         }
         .avatar-container {
             text-align: center;
@@ -214,6 +241,31 @@
                     <div id="p-hometown" class="info-value">-</div>
                     <span id="tag-hometown" class="privacy-tag">状态</span>
                 </div>
+            </div>
+        </div>
+
+        <!-- 新增功能集成区 -->
+        <div class="card">
+            <h3 style="margin-top: 0; margin-bottom: 10px;">功能集成区</h3>
+            <div class="feature-grid">
+                <a href="space.html" class="feature-btn">
+                    <span>个人空间</span>
+                    <span>→</span>
+                </a>
+                <!-- 若后续有成员列表页面，可在此添加对应链接 -->
+                <!-- <a href="members.html" class="feature-btn"><span>成员列表</span><span>→</span></a> -->
+                <a href="feedback.html" class="feature-btn">
+                    <span>意见反馈</span>
+                    <span>→</span>
+                </a>
+                <a href="confirm.html" class="feature-btn">
+                    <span>认证中心</span>
+                    <span>→</span>
+                </a>
+                <a href="index.html" class="feature-btn">
+                    <span>返回论坛首页</span>
+                    <span>→</span>
+                </a>
             </div>
         </div>
     </div>
