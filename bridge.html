@@ -3,25 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>个人信息桥接与资料中心 - 海高论坛</title>
+    <title>个人信息桥接中心 - 海高论坛</title>
     <link rel="icon" type="image/png" href="./image.png">
+    <!-- PWA 应用清单 -->
+    <link rel="manifest" href="manifest.json">
     <!-- 引入 Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         :root {
-            --bg-color: #f4f6f8; --text-color: #2d3748; --card-bg: rgba(255, 255, 255, 0.95);
-            --border-color: #e2e8f0; --primary-color: #66ccff; --meta-color: #718096; --hover-bg: #ebf8ff;
+            --bg-color: #f4f6f8; --text-color: #2d3748; 
+            --card-bg: rgba(255, 255, 255, 0.85); --border-color: rgba(226, 232, 240, 0.6); 
+            --primary-color: #3182ce; --meta-color: #718096; --hover-bg: #ebf8ff;
+        }
+        [data-theme="dark"] {
+            --bg-color: #1a202c; --text-color: #f7fafc; 
+            --card-bg: rgba(45, 55, 72, 0.85); --border-color: rgba(74, 85, 104, 0.6); 
+            --primary-color: #63b3ed; --meta-color: #a0aec0; --hover-bg: #2c5282;
         }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: var(--bg-color); color: var(--text-color);
-            margin: 0; padding: 20px; box-sizing: border-box;
+            background-color: var(--bg-color);
+            background-image: url('beijing.png');
+            background-size: cover; background-position: center;
+            background-repeat: no-repeat; background-attachment: fixed;
+            color: var(--text-color); margin: 0; padding: 20px; box-sizing: border-box;
+            min-height: 100vh;
         }
-        .container { max-width: 700px; margin: 0 auto; }
+        .container { max-width: 750px; margin: 0 auto; }
         .card {
-            background: var(--card-bg); border: 1px solid var(--border-color);
+            background-color: var(--card-bg); backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border-color);
             border-radius: 12px; padding: 25px; margin-bottom: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
         }
         .flex { display: flex; justify-content: space-between; align-items: center; }
         input, select {
@@ -37,10 +50,7 @@
         .profile-row { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
         .profile-row label { width: 90px; font-size: 13px; color: var(--meta-color); flex-shrink: 0; }
         
-        /* 头像样式 */
-        .avatar-container {
-            text-align: center; margin-bottom: 20px; position: relative;
-        }
+        .avatar-container { text-align: center; margin-bottom: 20px; }
         .avatar-img {
             width: 100px; height: 100px; border-radius: 50%; object-fit: cover;
             border: 3px solid var(--primary-color); box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -65,7 +75,7 @@
     </div>
 
     <div class="card">
-        <!-- 头像显示与上传区域 -->
+        <!-- 头像显示与上传区域 (默认为 icon.png) -->
         <div class="avatar-container">
             <img id="user-avatar" src="icon.png" alt="用户头像" class="avatar-img">
             <div>
@@ -82,14 +92,13 @@
         </div>
 
         <h3>账号与基本资料</h3>
-        
         <div class="profile-row">
             <label>绑定邮箱：</label>
-            <input type="text" id="p-email" disabled style="background: var(--bg-color); margin-bottom:0;">
+            <input type="text" id="p-email" disabled style="margin-bottom:0;">
         </div>
         <div class="profile-row">
             <label>当前身份：</label>
-            <input type="text" id="p-role" disabled style="background: var(--bg-color); margin-bottom:0;">
+            <input type="text" id="p-role" disabled style="margin-bottom:0;">
         </div>
         <div class="profile-row">
             <label><span style="color:red;">*</span> 年级：</label>
@@ -105,7 +114,6 @@
         <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;">
 
         <h3>详细个人档案 (及公开状态)</h3>
-        
         <div class="profile-row">
             <label>昵称：</label>
             <input type="text" id="p-nickname" style="margin-bottom:0;">
@@ -152,11 +160,47 @@
 </div>
 
 <script>
-    // 初始化复用主项目的 Supabase 实例
+    // 1. 初始化主题与自定义背景（完全参考 space.html 实现逻辑）
+    function initThemeAndBg() {
+        const savedTheme = localStorage.getItem('forum_theme');
+        if (savedTheme === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        } else if (savedTheme === 'light') {
+            document.documentElement.removeAttribute('data-theme');
+        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+
+        const customBg = localStorage.getItem('forum_custom_bg') || localStorage.getItem('custom_bg') || localStorage.getItem('customBg') || localStorage.getItem('bg_image');
+        if (customBg) {
+            document.body.style.backgroundImage = `url("${customBg}")`;
+        } else {
+            document.body.style.backgroundImage = "url('beijing.png')";
+        }
+    }
+    initThemeAndBg();
+
+    // 监听多标签页或主页动态切换背景和主题事件
+    window.addEventListener('storage', (event) => {
+        if (event.key === 'forum_theme') {
+            if (event.newValue === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+            }
+        } else if (['forum_custom_bg', 'custom_bg', 'customBg', 'bg_image'].includes(event.key)) {
+            if (event.newValue) {
+                document.body.style.backgroundImage = `url("${event.newValue}")`;
+            } else {
+                document.body.style.backgroundImage = "url('beijing.png')";
+            }
+        }
+    });
+
+    // 2. 初始化 Supabase 实例与加载用户资料
     const db = window.sbApp || window.supabase.createClient('https://snlikjcmuwkyibogfupy.supabase.co', 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW');
     let currentUser = null;
 
-    // 页面加载时检查登录并拉取数据
     async function initBridgePage() {
         const { data: { session } } = await db.auth.getSession();
         if (!session) {
@@ -168,51 +212,45 @@
         loadUserProfileData(currentUser.id);
     }
 
-    // 从 profiles 表加载用户详细数据
     async function loadUserProfileData(userId) {
         const { data, error } = await db.from('profiles').select('*').eq('id', userId).single();
-        if (error || !data) {
-            console.error('获取档案失败', error);
-            return;
-        }
+        if (error || !data) return;
 
-        // 基础与账号信息
         document.getElementById('p-email').value = currentUser.email;
         document.getElementById('p-role').value = data.is_admin ? '管理员' : '普通成员';
         document.getElementById('p-grade').value = data.grade || '高一';
         document.getElementById('p-nickname').value = data.nickname || '';
 
-        // 等级与经验展示
+        // 等级与经验
         const exp = data.exp || 0;
         const level = data.level || 1;
         document.getElementById('user-level-tag').innerText = `Lv.${level} (当前经验: ${exp})`;
 
-        // 头像显示：如果数据库存了头像URL，则显示，否则默认为 icon.png
+        // 头像展示：若没有自定义头像则默认使用 icon.png
         const avatarImg = document.getElementById('user-avatar');
         avatarImg.src = data.avatar_url || 'icon.png';
 
-        // 扩展字段
+        // 填充详细字段与公开状态
         const fields = ['real_name', 'phone', 'gender', 'age', 'birthday', 'constellation', 'hometown'];
         fields.forEach(field => {
-            document.getElementById(`p-${field.replace('_', '-')}`).value = data[field] || '';
+            const inputEl = document.getElementById(`p-${field.replace('_', '-')}`);
+            if (inputEl) inputEl.value = data[field] || '';
             const pubCheckbox = document.getElementById(`pub-${field.replace('_', '-')}`);
             if (pubCheckbox) {
-                pubCheckbox.checked = data[`pub_${field}`] !== false; // 默认勾选公开
+                pubCheckbox.checked = data[`pub_${field}`] !== false;
             }
         });
     }
 
-    // 处理头像本地压缩或直接转Base64存储在 Supabase profiles 的 avatar_url 中
+    // 头像上传处理（支持本地预览、Base64 转换并实时同步到 Supabase）
     window.handleAvatarUpload = function(input) {
         if (input.files && input.files[0]) {
             const file = input.files[0];
             const reader = new FileReader();
             reader.onload = async function(e) {
                 const base64Img = e.target.result;
-                // 实时预览
                 document.getElementById('user-avatar').src = base64Img;
                 
-                // 自动同步保存到 Supabase 数据库
                 const { error } = await db.from('profiles').update({
                     avatar_url: base64Img
                 }).eq('id', currentUser.id);
@@ -220,7 +258,7 @@
                 const msgEl = document.getElementById('avatar-msg');
                 if (error) {
                     msgEl.style.color = 'red';
-                    msgEl.innerText = '头像更新到数据库失败: ' + error.message;
+                    msgEl.innerText = '头像更新到云端失败: ' + error.message;
                 } else {
                     msgEl.style.color = 'green';
                     msgEl.innerText = '头像已成功更新并保存！';
@@ -230,7 +268,7 @@
         }
     }
 
-    // 保存所有个人信息修改
+    // 保存所有修改
     window.saveBridgeProfile = async function() {
         if (!currentUser) return;
 
