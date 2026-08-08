@@ -225,15 +225,29 @@
         });
 
         // 2. Supabase 签到及排行榜逻辑
-        // 获取当前 UTC+8 的日期字符串 (YYYY-MM-DD)
         function getTodayString() {
             const now = new Date();
             const utc8Date = new Date(now.getTime() + (8 * 60 - now.getTimezoneOffset()) * 60000);
             return utc8Date.toISOString().split('T')[0];
         }
 
+        // 获取全局统一的 Supabase 实例 (main.js 中定义的 window.sbApp)
+        function getSupabase() {
+            if (window.sbApp) return window.sbApp;
+            // 兜底：如果 main.js 尚未完全初始化，尝试在这里直接创建
+            if (window.supabase) {
+                window.sbApp = window.supabase.createClient(
+                    'https://snlikjcmuwkyibogfupy.supabase.co', 
+                    'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW'
+                );
+                return window.sbApp;
+            }
+            return null;
+        }
+
         async function initCheckInPage() {
-            if (!window.db) {
+            const client = getSupabase();
+            if (!client) {
                 setTimeout(initCheckInPage, 100);
                 return;
             }
@@ -243,13 +257,16 @@
 
         // 检查当前用户今天是否已经签到
         async function checkUserStatus() {
-            const { data: { session } } = await window.db.auth.getSession();
+            const client = getSupabase();
+            if (!client) return;
+
+            const { data: { session } } = await client.auth.getSession();
             if (!session) return;
 
             const userId = session.user.id;
             const todayStr = getTodayString();
 
-            const { data, error } = await window.db
+            const { data, error } = await client
                 .from('checkins')
                 .select('*')
                 .eq('user_id', userId)
@@ -265,7 +282,13 @@
 
         // 执行签到（调用 Supabase 后端 RPC 函数处理安全性与并发加锁）
         async function handleCheckIn() {
-            const { data: { session } } = await window.db.auth.getSession();
+            const client = getSupabase();
+            if (!client) {
+                alert('系统正在初始化，请稍后再试！');
+                return;
+            }
+
+            const { data: { session } } = await client.auth.getSession();
             if (!session) {
                 alert('请先登录后再进行签到！');
                 window.location.href = 'index.html';
@@ -278,7 +301,7 @@
             btn.disabled = true;
 
             // 调用后端 SQL 函数 perform_checkin
-            const { data, error } = await window.db.rpc('perform_checkin', {
+            const { data, error } = await client.rpc('perform_checkin', {
                 p_user_id: userId,
                 p_date: todayStr
             });
@@ -301,10 +324,13 @@
 
         // 加载今日排行榜
         async function loadRankings() {
+            const client = getSupabase();
+            if (!client) return;
+
             const todayStr = getTodayString();
             const rankListEl = document.getElementById('rank-list');
 
-            const { data, error } = await window.db
+            const { data, error } = await client
                 .from('checkins')
                 .select(`
                     rank,
