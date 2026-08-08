@@ -188,7 +188,7 @@
     </div>
 
     <script>
-        // 1. 初始化主题与自定义背景（与 feedback.html 保持一致）
+        // 1. 初始化主题与自定义背景
         function initThemeAndBg() {
             const savedTheme = localStorage.getItem('forum_theme');
             if (savedTheme === 'dark') {
@@ -231,10 +231,9 @@
             return utc8Date.toISOString().split('T')[0];
         }
 
-        // 获取全局统一的 Supabase 实例 (main.js 中定义的 window.sbApp)
+        // 获取全局统一的 Supabase 实例
         function getSupabase() {
             if (window.sbApp) return window.sbApp;
-            // 兜底：如果 main.js 尚未完全初始化，尝试在这里直接创建
             if (window.supabase) {
                 window.sbApp = window.supabase.createClient(
                     'https://snlikjcmuwkyibogfupy.supabase.co', 
@@ -255,7 +254,7 @@
             await loadRankings();
         }
 
-        // 检查当前用户今天是否已经签到
+        // 检查当前用户今天是否已经签到（使用 maybeSingle 避免 406 报错）
         async function checkUserStatus() {
             const client = getSupabase();
             if (!client) return;
@@ -271,7 +270,7 @@
                 .select('*')
                 .eq('user_id', userId)
                 .eq('checkin_date', todayStr)
-                .single();
+                .maybeSingle();
 
             if (data) {
                 const btn = document.getElementById('checkin-btn');
@@ -280,7 +279,7 @@
             }
         }
 
-        // 执行签到（调用 Supabase 后端 RPC 函数处理安全性与并发加锁）
+        // 执行签到
         async function handleCheckIn() {
             const client = getSupabase();
             if (!client) {
@@ -367,14 +366,13 @@
             }).join('');
         }
 
-        // 简单的 HTML 转义防注入
+        // HTML 转义防注入
         function escapeHtml(str) {
             return str.replace(/[&<>'"]/g, 
                 tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
             );
         }
 
-        // 页面加载完成后初始化
         initCheckInPage();
     </script>
 </body>
