@@ -168,7 +168,7 @@
             <h2>每日签到打卡</h2>
             <p class="desc">
                 每日 0 点（UTC+8）刷新签到状态。<br>
-                <strong>奖励规则：</strong> 第 1 名签到经验 +5，第 2 名 +4，第 3 名 +3，其余 +1。
+                <strong>奖励规则：</strong> 第 1 名签到经验 +5，第 2 名 +4，第 3 名 +3，其余按时签到者均可参与打卡记录。
             </p>
             <div class="btn-container">
                 <button id="checkin-btn" onclick="handleCheckIn()">点击签到</button>
@@ -225,10 +225,17 @@
         });
 
         // 2. Supabase 签到及排行榜逻辑
+        // 精准计算标准 UTC+8 日期字符串 (YYYY-MM-DD)，彻底解决跨天不刷新或时区偏差问题
         function getTodayString() {
             const now = new Date();
-            const utc8Date = new Date(now.getTime() + (8 * 60 - now.getTimezoneOffset()) * 60000);
-            return utc8Date.toISOString().split('T')[0];
+            // 转换为绝对的 UTC+8 毫秒数
+            const utcTime = now.getTime() + (now.getTimezoneOffset() * 60000);
+            const utc8Time = new Date(utcTime + (3600000 * 8));
+            
+            const year = utc8Time.getFullYear();
+            const month = String(utc8Time.getMonth() + 1).padStart(2, '0');
+            const day = String(utc8Time.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
         }
 
         // 获取全局统一的 Supabase 实例
@@ -244,6 +251,8 @@
             return null;
         }
 
+        let cachedToday = getTodayString();
+
         async function initCheckInPage() {
             const client = getSupabase();
             if (!client) {
@@ -254,7 +263,7 @@
             await loadRankings();
         }
 
-        // 检查当前用户今天是否已经签到（使用 maybeSingle 避免 406 报错）
+        // 检查当前用户今天是否已经签到
         async function checkUserStatus() {
             const client = getSupabase();
             if (!client) return;
@@ -272,10 +281,13 @@
                 .eq('checkin_date', todayStr)
                 .maybeSingle();
 
+            const btn = document.getElementById('checkin-btn');
             if (data) {
-                const btn = document.getElementById('checkin-btn');
                 btn.innerText = '今日已签到';
                 btn.disabled = true;
+            } else {
+                btn.innerText = '点击签到';
+                btn.disabled = false;
             }
         }
 
@@ -299,7 +311,6 @@
             const btn = document.getElementById('checkin-btn');
             btn.disabled = true;
 
-            // 调用后端 SQL 函数 perform_checkin
             const { data, error } = await client.rpc('perform_checkin', {
                 p_user_id: userId,
                 p_date: todayStr
@@ -372,6 +383,15 @@
                 tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
             );
         }
+
+        // 监听页面重新获得焦点（例如用户半夜挂着网页，过零点后切回页面），自动重新检测日期并刷新签到与排行状态
+        window.addEventListener('focus', () => {
+            const currentToday = getTodayString();
+            if (currentToday !== cachedToday) {
+                cachedToday = currentToday;
+                initCheckInPage();
+            }
+        });
 
         initCheckInPage();
     </script>
