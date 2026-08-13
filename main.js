@@ -140,3 +140,31 @@ window.addEventListener('DOMContentLoaded', () => {
         }
     }, 600);
 });
+// --- 申请 PWA 永久化存储（防止浏览器在设备空间紧张时自动清理缓存） ---
+async function ensurePersistentStorage() {
+  if (navigator.storage && navigator.storage.persist) {
+    try {
+      const alreadyPersisted = await navigator.storage.persisted();
+      if (alreadyPersisted) {
+        console.log("存储已被永久授权，设备空间紧张时不会被自动清理。");
+        return true;
+      }
+      const granted = await navigator.storage.persist();
+      if (granted) {
+        console.log("存储持久化申请成功！");
+        return true;
+      } else {
+        console.log("存储持久化申请被拒绝（通常在用户未将应用安装到桌面或未频繁使用时）。");
+        return false;
+      }
+    } catch (error) {
+      console.error("申请持久化存储时发生错误:", error);
+      return false;
+    }
+  }
+}
+
+// 页面加载完成后自动触发一次持久化申请
+window.addEventListener('DOMContentLoaded', () => {
+  ensurePersistentStorage();
+});
