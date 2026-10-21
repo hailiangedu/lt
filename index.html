@@ -9,6 +9,9 @@
 <link rel="manifest" href="manifest.json?v=3">
 <!-- 引入 Supabase SDK --> 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> 
+<!-- 全局配置与共享工具层 -->
+<script src="config.js"></script>
+<script src="common.js"></script>
 <!-- 引入独立的 PWA 引导脚本 -->
 <script src="main.js" defer></script>
 <style> 
@@ -127,7 +130,7 @@ button:hover { opacity: 0.9; }
                 <button onclick="window.location.href='bridge.html'" style="background:#4a5568;">互动空间</button>
                 <button onclick="window.openProfile()" style="background:#4a5568; position: relative;"> 
                     个人中心 <span id="notification-badge" class="hidden" style="position:absolute; top:-5px; right:-5px; background:red; width:10px; height:10px; border-radius:50%;"></span>                 
-                </buttn>                 
+                </button>                 
                 <button onclick="window.toggleTheme()" style="background:none; border:1px solid var(--border-color); color:var(--text-color);">🌓 主题</button>                 
                 <button onclick="window.handleLogout()" style="background:#e53e3e;">退出</button>             
             </div>         
@@ -265,14 +268,9 @@ button:hover { opacity: 0.9; }
 </div> 
 
 <script>
-// 初始化加载本地自定义背景
-function initCustomBackground() {
-    const savedBg = localStorage.getItem('forum_custom_bg');
-    if (savedBg) {
-        document.body.style.backgroundImage = `url("${savedBg}")`;
-    }
-}
-initCustomBackground();
+// 初始化主题与自定义背景（共享实现，补齐系统暗色偏好回退），并监听跨页实时同步
+initThemeAndBackground();
+watchSettingsSync();
 
 // 用于暂存用户选择的图片文件
 let selectedImageFile = null;
@@ -362,18 +360,16 @@ window.handlePostSubmit = async function() {
     }
 };
 
-
-// 修改后的安全代码：
-// 直接复用 main.js 创建好的全局唯一客户端实例
-const db = window.sbApp || window.supabase.createClient(
-    'https://snlikjcmuwkyibogfupy.supabase.co', 
-    'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW'
-);
-window.sbApp = db;
+// 全局唯一 Supabase 客户端（由 common.js 的 getSupabaseClient() 懒创建并挂载 window.sbApp）
+const db = getSupabaseClient();
 
 let currentCategoryId = null;
 let currentUserProfile = null;
 let currentAuthUser = null;
+// 当前页话题内存映射：openEditModal 仅凭 topicId 回查标题/内容，避免把用户内容内联进 onclick
+let currentTopicsMap = {};
+// 当前页相关用户档案映射：replyToUser 仅凭评论者 user_id 回查昵称
+let currentProfileMap = {};
 
 db.auth.getSession().then(({ data: { session } }) => {
     if (session) initUserSession(session.user);
@@ -405,12 +401,8 @@ async function initUserSession(user) {
     if (typeof window.trySyncPushSubscription === 'function') {
         window.trySyncPushSubscription();
     }
-    // 当用户登录成功，或者确定当前已登录时调用：
-    if (typeof window.syncPushSubscriptionToSupabase === 'function') {
-        window.syncPushSubscriptionToSupabase();
-    }
     
-    // === 新增：将当前登录用户的 ID 同步给 Service Worker 用于后台通知 ===
+    // === 将当前登录用户的 ID 同步给 Service Worker 用于后台通知 ===
     if (window.syncUserIdToSW) {
         window.syncUserIdToSW(user.id);
     }
@@ -418,7 +410,7 @@ async function initUserSession(user) {
     currentUserProfile = data || { nickname: user.email.split('@')[0], is_admin: false, email: user.email };
     if (!currentUserProfile.email) currentUserProfile.email = user.email;
     
-    document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${currentUserProfile.nickname}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
+    document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${escapeHtml(currentUserProfile.nickname)}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
     checkUnreadNotifications(user.id);
     
     const toggleBtn = document.getElementById('post-mode-toggle');
@@ -446,8 +438,9 @@ async function initUserSession(user) {
 }
 
 async function checkUnreadNotifications(userId) {
-    const { data } = await db.from('notifications').select('*').eq('user_id', userId).eq('is_read', false);
-    if (data && data.length > 0) {
+    // 使用 head count 计数查询判断未读红点，避免拉取全部通知行
+    const { count } = await db.from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('is_read', false);
+    if (count && count > 0) {
         document.getElementById('notification-badge').classList.remove('hidden');
     } else {
         document.getElementById('notification-badge').classList.add('hidden');
@@ -465,7 +458,6 @@ window.openProfile = async function() {
     if (!currentAuthUser) return;
     document.getElementById('profile-email').value = currentAuthUser.email;
     document.getElementById('profile-role').value = currentUserProfile.is_admin ? '🛡️ 管理员 (Admin)' : '普通成员';
-    // 假设 profile 为当前用户的资料对象
     document.getElementById('p-grade').value = currentUserProfile.grade || '英才';
     document.getElementById('p-nickname').value = currentUserProfile.nickname || '';
     document.getElementById('p-real-name').value = currentUserProfile.real_name || '';
@@ -504,10 +496,10 @@ async function loadNotifications(userId) {
         div.style.cssText = `padding: 10px; margin-bottom: 8px; font-size: 13px; ${notif.is_read ? '' : 'border-left: 3px solid var(--primary-color);'}`;
         div.innerHTML = `
             <div class="flex" style="margin-bottom:4px;">
-                <b>${notif.title}</b>
+                <b>${escapeHtml(notif.title)}</b>
                 <span style="font-size:11px; color:var(--meta-color);">${new Date(notif.created_at).toLocaleString()}</span>
             </div>
-            <p style="margin:0;">${notif.content}</p>
+            <p style="margin:0;">${escapeHtml(notif.content)}</p>
         `;
         container.appendChild(div);
     });
@@ -624,7 +616,7 @@ window.updateProfile = async function() {
         currentUserProfile = { ...currentUserProfile, ...updateData };
         msgEl.style.color = 'green';
         msgEl.innerText = '资料更新成功！';
-        document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${currentUserProfile.nickname}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
+        document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${escapeHtml(currentUserProfile.nickname)}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
     }
 };
 
@@ -666,10 +658,15 @@ window.handleRegister = async function() {
         return;
     }
 
-    // 清空错误提示，继续执行原有的 Supabase 注册逻辑...
+    // 4. 前端校验密码长度（不少于 6 位，与登录提示保持一致），校验失败不发请求
+    if (!password || password.length < 6) {
+        authMsg.innerText = '注册失败：密码长度不能少于 6 位字符！';
+        return;
+    }
+
+    // 清空错误提示，继续执行原有的 Supabase 注册逻辑
     authMsg.innerText = '';
     
-    // 示例：Supabase 注册调用
     const { data, error } = await db.auth.signUp({ email, password });
     if (error) {
         authMsg.innerText = '注册出错: ' + error.message;
@@ -682,12 +679,17 @@ window.handleLogout = async function() {
     await db.auth.signOut();
     currentUserProfile = null;
     currentAuthUser = null;
+    currentTopicsMap = {};
+    currentProfileMap = {};
     document.getElementById('forum-section').classList.add('hidden');
     document.getElementById('profile-section').classList.add('hidden');
     document.getElementById('auth-section').classList.remove('hidden');
     document.getElementById('email').value = '';
     document.getElementById('password').value = '';
     document.getElementById('auth-msg').innerText = '';
+    // 复位列表容器为初始“加载中”状态
+    document.getElementById('topics-container').innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
+    document.getElementById('categories-list').innerText = '加载中...';
 };
 
 window.toggleTheme = function() {
@@ -700,14 +702,6 @@ window.toggleTheme = function() {
         localStorage.setItem('forum_theme', 'dark');
     }
 };
-
-function initTheme() {
-    const savedTheme = localStorage.getItem('forum_theme');
-    if (savedTheme === 'dark') {
-        document.documentElement.setAttribute('data-theme', 'dark');
-    }
-}
-initTheme();
 
 async function loadCategories() {
     const container = document.getElementById('categories-list');
@@ -734,7 +728,7 @@ async function loadCategories() {
         loadTopics(data[0].id);
     }
 }
-//let currentCategoryId = null;
+
 let currentPage = 1;
 const pageSize = 5;
 let totalTopicsCount = 0;
@@ -747,13 +741,6 @@ async function loadTopics(categoryId, page = 1) {
     const container = document.getElementById('topics-container');
     container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
 
-    const { data: profilesData } = await db.from('profiles').select('id, nickname, is_admin');
-    const profileMap = {};
-    if (profilesData) {
-        profilesData.forEach(p => { 
-            profileMap[p.id] = p; 
-        });
-    }
     // 查询总数与当前页数据
     const from = (currentPage - 1) * pageSize;
     const to = from + pageSize - 1;
@@ -768,12 +755,13 @@ async function loadTopics(categoryId, page = 1) {
     if (count !== null) totalTopicsCount = count;
 
     if (error || !topics || topics.length === 0) {
+        currentTopicsMap = {};
+        currentProfileMap = {};
         container.innerHTML = '<div class="card"><p style="font-size:13px; color:var(--meta-color); margin:0;">该板块下暂无话题，快来发表第一个话题吧！</p></div>';
         updatePaginationUI();
         return;
     }
 
-    // --- 后续原有的 profiles、comments、likes 查询逻辑保持不变 ---
     const topicIds = topics.map(t =>t.id);
 
     const { data: comments } = await db.from('comments').select('*').in('topic_id', topicIds);
@@ -785,6 +773,28 @@ async function loadTopics(categoryId, page = 1) {
             commentMap[c.topic_id].push(c);
         });
     }
+
+    // 仅按需查询当前页话题与评论涉及的用户档案（避免为渲染昵称全量拉取 profiles）
+    const userIdSet = new Set();
+    topics.forEach(t => userIdSet.add(t.user_id));
+    if (comments) {
+        comments.forEach(c => userIdSet.add(c.user_id));
+    }
+    const profileMap = {};
+    const userIds = Array.from(userIdSet);
+    if (userIds.length > 0) {
+        const { data: profilesData } = await db.from('profiles').select('id, nickname, is_admin').in('id', userIds);
+        if (profilesData) {
+            profilesData.forEach(p => { 
+                profileMap[p.id] = p; 
+            });
+        }
+    }
+    currentProfileMap = profileMap;
+
+    // 维护当前页话题内存映射（供编辑弹窗按 ID 回查标题/内容）
+    currentTopicsMap = {};
+    topics.forEach(t => { currentTopicsMap[t.id] = t; });
 
     let likedSet = new Set();
     let favSet = new Set();
@@ -804,22 +814,21 @@ async function loadTopics(categoryId, page = 1) {
         });
     }
 
-    // 7. 清空容器并开始循环渲染当前页的帖子
+    // 清空容器并循环渲染当前页的帖子
     container.innerHTML = ''; 
     
     for (const topic of topics) {
         const div = document.createElement('div');
         div.className = 'card'; 
 
-        let fixedImageUrl = topic.image_url;
-        if (fixedImageUrl) {
-            // 如果包含了错误路径或旧域名，动态替换成正确的域名
-            fixedImageUrl = fixedImageUrl
-                .replace(/https?:\/\/[^\/]+\/undefined/, 'https://hgwall.cc.cd')
-                .replace('hglt.cc.cd', 'hgwall.cc.cd');
+        // 图片渲染：统一使用共享修复后的历史图片地址（旧域名替换 / undefined 路径修复）
+        const fixedImageUrl = fixImageUrl(topic.image_url);
+        let imageHtml = '';
+        if (topic.image_url && topic.image_url.trim() !== '') {
+            imageHtml = `<div style="margin-top: 8px; margin-bottom: 8px;">
+                            <img src="${fixedImageUrl}" alt="帖子图片" style="max-width: 100%; max-height: 400px; border-radius: 6px; display: block; object-fit: contain;">
+                         </div>`;
         }
-        // 之后用 fixedImageUrl 渲染 <img> 标签
-        let imageHtml = fixedImageUrl ? `<img src="${fixedImageUrl}" style="max-width:100%;">` : '';
 
         const authorProfile = profileMap[topic.user_id];
         const authorName = authorProfile ? authorProfile.nickname : (topic.user_name || '匿名用户');
@@ -834,11 +843,10 @@ async function loadTopics(categoryId, page = 1) {
             const isCommentOwner = currentAuthUser && currentAuthUser.id === comment.user_id;
             const isCommentAdmin = currentUserProfile && currentUserProfile.is_admin;
             const canDeleteComment = isCommentOwner || isCommentAdmin;
-            // --- 新增：处理评论时间 ---
+            // --- 处理评论时间 ---
             let timeString = '';
             if (comment.created_at) {
                 const date = new Date(comment.created_at);
-                // 可以根据需求调整时间的展示格式（这里展示为 年-月-日 时:分）
                 const year = date.getFullYear();
                 const month = String(date.getMonth() + 1).padStart(2, '0');
                 const day = String(date.getDate()).padStart(2, '0');
@@ -848,8 +856,8 @@ async function loadTopics(categoryId, page = 1) {
                 timeString = `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
             }
             const timeHtml = timeString ? `<span style="color:#718096; font-size:10px; margin-left:6px;">${timeString}</span>` : '';
-            // ---------------------------
-            let replyAction = `<button onclick="window.replyToUser('${topic.id}', \`${commentAuthor}\`)" style="background:transparent; color:var(--primary-color, #3182ce); border:none; font-weight: normal; font-size:9px; cursor:pointer; padding:0 4px; margin-left:6px;">回复</button>`;
+            // 回复仅传话题 ID 与评论者用户 ID，昵称由处理函数从内存映射回查
+            let replyAction = `<button onclick="window.replyToUser('${topic.id}', '${comment.user_id}')" style="background:transparent; color:var(--primary-color, #3182ce); border:none; font-weight: normal; font-size:9px; cursor:pointer; padding:0 4px; margin-left:6px;">回复</button>`;
 
             let commentActions = '';
             if (canDeleteComment) {
@@ -858,7 +866,7 @@ async function loadTopics(categoryId, page = 1) {
             commentsHtml += `
                 <div style="font-size:12px; margin-top:3px; padding-bottom:2px; display:flex; justify-content:space-between; align-items:center;">
                     <div>
-                        <span class="clickable-name" onclick="window.viewUserProfile('${comment.user_id}')">${commentAuthor}</span><b>:</b> ${comment.content} ${timeHtml} ${replyAction}
+                        <span class="clickable-name" onclick="window.viewUserProfile('${comment.user_id}')">${escapeHtml(commentAuthor)}</span><b>:</b> ${escapeHtml(comment.content)} ${timeHtml} ${replyAction}
                     </div>
                     <div style="flex-shrink:0;">
                         ${commentActions}
@@ -871,34 +879,27 @@ async function loadTopics(categoryId, page = 1) {
         const isOwner = currentAuthUser && currentAuthUser.id === topic.user_id;
         const isUserAdmin = currentUserProfile && currentUserProfile.is_admin;
 
-        // --- 你可以在这里继续拼接你的帖子卡片 HTML 内容 ---
         const isLiked = likedSet.has(topic.id);        
         const isFavorited = favSet.has(topic.id);        
         const likeCount = likeCountMap[topic.id] || 0;
-        // 权限与操作按钮定义（在这里补上 ownerActions）
+        // 权限与操作按钮定义（编辑仅传话题 ID，内容从内存映射回查）
         let ownerActions = '';
         if (isOwner) {
-            ownerActions += `<button onclick="window.openEditModal('${topic.id}', \`${topic.title.replace(/`/g, '\\`')}\`, \`${topic.content.replace(/`/g, '\\`')}\`)" style="background:transparent; color:#d69e2e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">编辑</button>`;
+            ownerActions += `<button onclick="window.openEditModal('${topic.id}')" style="background:transparent; color:#d69e2e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">编辑</button>`;
         }
         ownerActions += `<button onclick="window.deleteTopic('${topic.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">删除</button>`;
         if (isUserAdmin) {
-            ownerActions += `<button onclick="window.warnUser('${topic.user_id}', '${topic.id}')" style="background:transparent; color:#c53030; border:none; font-size:11px; cursor:pointer; padding:0 4px;">警告</button>`;
-        }
-        //let imageHtml = '';
-        if (topic.image_url && topic.image_url.trim() !== '') {
-            imageHtml = `<div style="margin-top: 8px; margin-bottom: 8px;">
-                            <img src="${topic.image_url}" alt="帖子图片" style="max-width: 100%; max-height: 400px; border-radius: 6px; display: block; object-fit: contain;">
-                         </div>`;
+            ownerActions += `<button onclick="window.warnUser('${topic.user_id}')" style="background:transparent; color:#c53030; border:none; font-size:11px; cursor:pointer; padding:0 4px;">警告</button>`;
         }
         div.innerHTML = `
-                <h4 style="margin:0 0 6px 0;">${topic.title}</h4>
-                <p style="margin:0 0 8px 0; white-space: pre-wrap; font-size:13px;">${topic.content}</p>
+                <h4 style="margin:0 0 6px 0;">${escapeHtml(topic.title)}</h4>
+                <p style="margin:0 0 8px 0; white-space: pre-wrap; font-size:13px;">${escapeHtml(topic.content)}</p>
                 
                 ${imageHtml}
                 
                 <div class="flex" style="margin-top:6px; margin-bottom:4px;">
                     <span style="font-size:11px; color:var(--meta-color);">
-                        发布者：<b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${authorName}</b>${badge} &nbsp;|&nbsp; 发布于 ${new Date(topic.created_at).toLocaleString()}
+                        发布者：<b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${escapeHtml(authorName)}</b>${badge} &nbsp;|&nbsp; 发布于 ${new Date(topic.created_at).toLocaleString()}
                     </span>
                     <!-- 【完整保留】点赞与收藏交互按钮 -->
                     <div style="display:flex; gap:10px; align-items:center;">
@@ -921,78 +922,12 @@ async function loadTopics(categoryId, page = 1) {
                     <button onclick="window.createComment('${topic.id}')" style="font-size:12px; padding:3px 12px;">评论</button>
                 </div>
             `;            
-container.appendChild(div);
+        container.appendChild(div);
     }
 
-    // 8. 刷新分页按钮状态及页码显示
+    // 刷新分页按钮状态及页码显示
     updatePaginationUI();
-    }
-    /*if (isOwner) {                
-    ownerActions += `<button onclick="window.openEditModal('${topic.id}', \`${topic.title.replace(/`/g, '\\`')}\`, \`${topic.content.replace(/`/g, '\\`')}\`)" style="background:transparent; color:#d69e2e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">编辑</button>`;            
-    }            
-    ownerActions += `<button onclick="window.deleteTopic('${topic.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">删除</button>`;            
-    if (isUserAdmin) {                
-    ownerActions += `<button onclick="window.warnUser('${topic.user_id}', '${topic.id}')" style="background:transparent; color:#c53030; border:none; font-size:11px; cursor:pointer; padding:0 4px;">警告</button>`;            
-    }            
-    ownerActions += `</div>`;        
-    }
-            let commentsHtml = '';        
-    const topicComments = commentMap[topic.id] || [];        
-    if (topicComments.length > 0) {            
-    topicComments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));            
-    commentsHtml = '<div style="margin-top:10px; border-top:1px dashed var(--border-color); padding-top:6px;">';            
-    topicComments.forEach(comment => {                
-    const cProfile = profileMap[comment.user_id];                
-    const cAuthor = cProfile ? cProfile.nickname : (comment.user_name || '匿名用户');                
-    const canDeleteComment = (currentAuthUser && currentAuthUser.id === comment.user_id) || isUserAdmin;
-                    commentsHtml += `
-                        <div style="font-size:12px; margin-bottom:6px; padding:4px 0; border-bottom:1px solid rgba(0,0,0,0.03); display:flex; justify-content:space-between; align-items:flex-start;">
-                            <div style="line-height:1.4; flex:1; word-break:break-all;">
-                                <b class="clickable-name" onclick="window.viewUserProfile('${comment.user_id}')">${cAuthor}</b>: <span style="color:var(--text-color);">${comment.content}</span>
-                                <span style="color:var(--meta-color); font-size:10px; margin-left:6px;">${new Date(comment.created_at).toLocaleString()}</span>
-                                <span onclick="window.replyToUser('${topic.id}', '${cAuthor}')" style="color:var(--primary-color); font-size:11px; cursor:pointer; margin-left:8px; user-select:none;">回复</span>
-                            </div>                        
-    ${canDeleteComment ? `<button onclick="window.deleteComment('${comment.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px; flex-shrink:0;">删除</button>` : ''}
-                        </div>
-                    `;            
-    });            
-    commentsHtml += '</div>';        
-    }
-    */
-    // === 【新增】读取该话题对应的点赞与收藏状态 ===        
-    /*const isLiked = likedSet.has(topic.id);        
-    const isFavorited = favSet.has(topic.id);        
-    const likeCount = likeCountMap[topic.id] || 0;
-            div.innerHTML = `
-                <h4 style="margin:0 0 6px 0;">${topic.title}</h4>
-                <p style="margin:0 0 8px 0; white-space: pre-wrap; font-size:13px;">${topic.content}</p>
-                <div class="flex" style="margin-top:6px; margin-bottom:4px;">
-                    <span style="font-size:11px; color:var(--meta-color);">
-                        发布者：<b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${authorName}</b>${badge} &nbsp;|&nbsp; 发布于 ${new Date(topic.created_at).toLocaleString()}
-                    </span>
-                    <!-- 【完整保留】点赞与收藏交互按钮 -->
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <button class="action-btn ${isLiked ? 'liked' : ''}" onclick="window.handleLike('${topic.id}', this)" style="background:none; border:none; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:2px; color:${isLiked ? '#e53e3e' : 'var(--meta-color)'};">
-                            <span class="like-icon">${isLiked ? '❤️' : '♡'}</span> 
-                            <span class="like-count">${likeCount}</span>
-                        </button>
-                        <button class="action-btn ${isFavorited ? 'favorited' : ''}" onclick="window.handleFavorite('${topic.id}', this)" style="background:none; border:none; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:2px; color:${isFavorited ? '#d69e2e' : 'var(--meta-color)'};">
-                            <span class="fav-icon">${isFavorited ? '⭐' : '☆'}</span> 
-                        </button>
-                    </div>  
-                </div>            
-    ${ownerActions}            
-    ${commentsHtml}
-                <div style="margin-top:8px; display:flex; gap:6px;">
-                    <input type="text" id="comment-input-${topic.id}" placeholder="写下你的评论..." style="font-size:12px; padding:3px 8px; flex:1;">
-                    <button onclick="window.createComment('${topic.id}')" style="font-size:12px; padding:3px 12px;">评论</button>
-                </div>
-            `;        
-    container.appendChild(div);    
-    //}
-    // 更新分页控件状态
-    updatePaginationUI();*/
-//}
+}
 
 // 翻页触发函数
 function changePage(direction) {
@@ -1014,148 +949,6 @@ function updatePaginationUI() {
     if (prevBtn) prevBtn.disabled = currentPage <= 1;
     if (nextBtn) nextBtn.disabled = currentPage >= maxPage;
 }
-// 🛡️ 评论时间调整为完整显示年月日与时间
-//async function loadTopics(categoryId) {
-    //const container = document.getElementById('topics-container');
-    //container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">加载中...</p>';
-    
-    /*const { data: profilesData } = await db.from('profiles').select('id, nickname, is_admin');
-    const profileMap = {};
-    if (profilesData) {
-        profilesData.forEach(p => { profileMap[p.id] = p; });
-    }*/
-    // 1. 定义分页参数
-    //const pageSize = 5; // 每页显示 5 个帖子
-    //let currentPage = 1; // 当前页码（如果该变量在外部维护，请确保传入或读取）
-
-    // 2. 计算当前页的起始和结束索引
-    //const from = (currentPage - 1) * pageSize;
-    //const to = from + pageSize - 1;
-  
-    /*const { data: topics, error, count } = await db
-        .from('topics')
-        .select('*',{ count: 'exact'})// 获取总记录数用于计算总页数
-        .eq('category_id', categoryId)
-        .order('created_at', { ascending: false })
-        .range(from, to); */// 核心：限制单次加载数量并分页
-
-    /*if (error || !topics || topics.length === 0) {
-        container.innerHTML = '<div class="card"><p style="font-size:13px; color:var(--meta-color); margin:0;">该板块下暂无话题，快来发表第一个话题吧！</p></div>';
-        return;
-    }*/
-
-    /*const topicIds = topics.map(t =>t.id);
-    const { data: comments } = await db.from('comments').select('*').in('topic_id', topicIds);
-    const commentMap = {};
-    if (comments) {
-        comments.forEach(c => {
-            if (!commentMap[c.topic_id]) commentMap[c.topic_id] = [];
-            commentMap[c.topic_id].push(c);
-        });
-    }
-
-    // === 【新增】真实查询当前用户的点赞与收藏状态以及全站点赞数 ===
-    let likedSet = new Set();
-    let favSet = new Set();
-    if (currentAuthUser) {
-        const { data: userLikes } = await db.from('likes').select('topic_id').eq('user_id', currentAuthUser.id).in('topic_id', topicIds);
-        if (userLikes) userLikes.forEach(l => likedSet.add(l.topic_id));
-
-        const { data: userFavs } = await db.from('favorites').select('topic_id').eq('user_id', currentAuthUser.id).in('topic_id', topicIds);
-        if (userFavs) userFavs.forEach(f => favSet.add(f.topic_id));
-    }
-
-    const { data: allLikes } = await db.from('likes').select('topic_id').in('topic_id', topicIds);
-    const likeCountMap = {};
-    if (allLikes) {
-        allLikes.forEach(l => {
-            likeCountMap[l.topic_id] = (likeCountMap[l.topic_id] || 0) + 1;
-        });
-    }
-    // =========================================================
-
-    container.innerHTML = '';
-    for (const topic of topics) {
-        const div = document.createElement('div');
-        div.className = 'card';
-        
-        const authorProfile = profileMap[topic.user_id];
-        const authorName = authorProfile ? authorProfile.nickname : (topic.user_name || '匿名用户');
-        const isAdmin = authorProfile && authorProfile.is_admin;
-        const badge = isAdmin ? '<span class="badge-admin">管理员</span>' : '';
-        const isOwner = currentAuthUser && currentAuthUser.id === topic.user_id;
-        const isUserAdmin = currentUserProfile && currentUserProfile.is_admin;
-        
-        let ownerActions = '';
-        if (isOwner || isUserAdmin) {
-            ownerActions += `<div style="margin-top:8px; display:flex; justify-content:flex-end; align-items:center; gap:6px;">`;
-            if (isOwner) {
-                ownerActions += `<button onclick="window.openEditModal('${topic.id}', \`${topic.title.replace(/`/g, '\\`')}\`, \`${topic.content.replace(/`/g, '\\`')}\`)" style="background:transparent; color:#d69e2e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">编辑</button>`;
-            }
-            ownerActions += `<button onclick="window.deleteTopic('${topic.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">删除</button>`;
-            if (isUserAdmin) {
-                ownerActions += `<button onclick="window.warnUser('${topic.user_id}', '${topic.id}')" style="background:transparent; color:#c53030; border:none; font-size:11px; cursor:pointer; padding:0 4px;">警告</button>`;
-            }
-            ownerActions += `</div>`;
-        }
-
-        let commentsHtml = '';
-        const topicComments = commentMap[topic.id] || [];
-        if (topicComments.length > 0) {
-            topicComments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-            commentsHtml = '<div style="margin-top:10px; border-top:1px dashed var(--border-color); padding-top:6px;">';
-            topicComments.forEach(comment => {
-                const cProfile = profileMap[comment.user_id];
-                const cAuthor = cProfile ? cProfile.nickname : (comment.user_name || '匿名用户');
-                const canDeleteComment = (currentAuthUser && currentAuthUser.id === comment.user_id) || isUserAdmin;
-
-                commentsHtml += `
-                    <div style="font-size:12px; margin-bottom:6px; padding:4px 0; border-bottom:1px solid rgba(0,0,0,0.03); display:flex; justify-content:space-between; align-items:flex-start;">
-                        <div style="line-height:1.4; flex:1; word-break:break-all;">
-                            <b class="clickable-name" onclick="window.viewUserProfile('${comment.user_id}')">${cAuthor}</b>: <span style="color:var(--text-color);">${comment.content}</span>
-                            <span style="color:var(--meta-color); font-size:10px; margin-left:6px;">${new Date(comment.created_at).toLocaleString()}</span>
-                            <span onclick="window.replyToUser('${topic.id}', '${cAuthor}')" style="color:var(--primary-color); font-size:11px; cursor:pointer; margin-left:8px; user-select:none;">回复</span>
-                        </div>
-                        ${canDeleteComment ? `<button onclick="window.deleteComment('${comment.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px; flex-shrink:0;">删除</button>` : ''}
-                    </div>
-                `;
-            });
-            commentsHtml += '</div>';
-        }
-        // === 【新增】读取该话题对应的点赞与收藏状态 ===
-        const isLiked = likedSet.has(topic.id);
-        const isFavorited = favSet.has(topic.id);
-        const likeCount = likeCountMap[topic.id] || 0;
-
-        div.innerHTML = `
-            <h4 style="margin:0 0 6px 0;">${topic.title}</h4>
-            <p style="margin:0 0 8px 0; white-space: pre-wrap; font-size:13px;">${topic.content}</p>
-            <div class="flex" style="margin-top:6px; margin-bottom:4px;">
-                <span style="font-size:11px; color:var(--meta-color);">
-                    发布者：<b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${authorName}</b>${badge} &nbsp;|&nbsp; 发布于 ${new Date(topic.created_at).toLocaleString()}
-                </span>
-
-                <!-- 【完整保留】点赞与收藏交互按钮 -->
-                <div style="display:flex; gap:10px; align-items:center;">
-                    <button class="action-btn ${isLiked ? 'liked' : ''}" onclick="window.handleLike('${topic.id}', this)" style="background:none; border:none; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:2px; color:${isLiked ? '#e53e3e' : 'var(--meta-color)'};">
-                        <span class="like-icon">${isLiked ? '❤️' : '♡'}</span> 
-                        <span class="like-count">${likeCount}</span>
-                    </button>
-                    <button class="action-btn ${isFavorited ? 'favorited' : ''}" onclick="window.handleFavorite('${topic.id}', this)" style="background:none; border:none; cursor:pointer; font-size:12px; display:flex; align-items:center; gap:2px; color:${isFavorited ? '#d69e2e' : 'var(--meta-color)'};">
-                        <span class="fav-icon">${isFavorited ? '⭐' : '☆'}</span> 
-                    </button>
-                </div>  
-            </div>
-            ${ownerActions}
-            ${commentsHtml}
-            <div style="margin-top:8px; display:flex; gap:6px;">
-                <input type="text" id="comment-input-${topic.id}" placeholder="写下你的评论..." style="font-size:12px; padding:3px 8px; flex:1;">
-                <button onclick="window.createComment('${topic.id}')" style="font-size:12px; padding:3px 12px;">评论</button>
-            </div>
-        `;
-        container.appendChild(div);
-    }
-}*/
 
 // 点赞处理函数
 window.handleLike = async function(postId, btnElement) {
@@ -1182,7 +975,7 @@ window.handleLike = async function(postId, btnElement) {
         countSpan.textContent = currentCount + 1;
     }
 
-    // 2. 真实写入数据库（将 post_id 修正为 topic_id）
+    // 2. 真实写入数据库
     try {
         if (isCurrentlyLiked) {
             const { error } = await db.from('likes')
@@ -1235,7 +1028,7 @@ window.handleFavorite = async function(postId, btnElement) {
         iconSpan.textContent = '⭐';
     }
 
-    // 2. 真实写入数据库（将 post_id 修正为 topic_id）
+    // 2. 真实写入数据库
     try {
         if (isCurrentlyFavorited) {
             const { error } = await db.from('favorites')
@@ -1307,7 +1100,7 @@ function compressImage(file, maxWidth = 1920, maxHeight = 2880, quality = 0.88) 
                             reject(new Error('图片压缩失败'));
                             return;
                         }
-                        // 保持原文件名和类型（如果是 PNG，也可以转成 JPEG 以获得更好压缩率）
+                        // 保持原文件名和类型
                         const compressedFile = new File([blob], file.name, {
                             type: file.type,
                             lastModified: Date.now(),
@@ -1324,7 +1117,10 @@ function compressImage(file, maxWidth = 1920, maxHeight = 2880, quality = 0.88) 
     });
 }
     
-window.replyToUser = function(topicId, authorName) {
+window.replyToUser = function(topicId, commentUserId) {
+    // 从当前页相关用户档案映射回查评论者昵称
+    const profile = currentProfileMap[commentUserId];
+    const authorName = profile ? profile.nickname : '匿名用户';
     const input = document.getElementById(`comment-input-${topicId}`);
     if (input) {
         input.value = `@${authorName} `;
@@ -1353,21 +1149,19 @@ window.createTopic = async function() {
 
                 let fileToUpload = selectedImageFile;
 
-                // 例如：如果图片大小超过 500KB，才执行压缩（500 * 1024 字节）
+                // 如果图片大小超过 1.6MB，才执行压缩
                 if (selectedImageFile.size > 1.6 * 1024 * 1024) {
                     if (submitBtn) submitBtn.innerText = '正在压缩图片...';
                     fileToUpload = await compressImage(selectedImageFile, 1200, 1200, 0.8);
                 }
                 
-                //const compressedFile = await compressImage(selectedImageFile, 1200, 1200, 0.8);
-
                 if (submitBtn) submitBtn.innerText = '上传图片中...';
                 // 构造 FormData
                 const formData = new FormData();
                 formData.append('file', fileToUpload);
 
-                // 请求 Supabase Edge Function 中转上传
-                const res = await fetch('https://snlikjcmuwkyibogfupy.supabase.co/functions/v1/upload-r2', {
+                // 请求 Supabase Edge Function 中转上传（地址由共享配置派生，全库仅 config.js 一份）
+                const res = await fetch(window.LT_CONFIG.SUPABASE_URL + '/functions/v1/upload-r2', {
                     method: 'POST',
                     headers: { 
                         // 带上 Supabase 客户端自带的 Anon 公钥，解决 401 拦截
@@ -1379,10 +1173,7 @@ window.createTopic = async function() {
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || '图片中转上传失败');
 
-                finalimageUrl = data.publicUrl || data.url;; // 获取后端返回的 R2 图片外链
-                
-                // 自动将图片以 Markdown 语法拼接到帖子内容后方
-                //content += `\n\n![lt-image](${finalimageUrl})`;
+                finalimageUrl = data.publicUrl || data.url; // 获取后端返回的 R2 图片外链
             } catch (err) {
                 alert('图片上传出错: ' + err.message);
                 if (submitBtn) submitBtn.innerText = '发布话题';
@@ -1450,7 +1241,7 @@ window.deleteComment = async function(commentId) {
     }
 };
 
-window.warnUser = async function(userId, topicId) {
+window.warnUser = async function(userId) {
     const reason = prompt('请输入对该用户进行警告或限流的原因（将自动生成系统通知发送给对方）：');
     if (!reason) return;
 
@@ -1464,10 +1255,13 @@ window.warnUser = async function(userId, topicId) {
     alert('已成功向该用户发出警告并发送通知！');
 };
 
-window.openEditModal = function(id, title, content) {
-    document.getElementById('edit-topic-id').value = id;
-    document.getElementById('edit-topic-title').value = title;
-    document.getElementById('edit-topic-content').value = content;
+window.openEditModal = function(topicId) {
+    // 从当前页话题内存映射回查标题与内容，避免内联拼接用户文本
+    const topic = currentTopicsMap[topicId];
+    if (!topic) return;
+    document.getElementById('edit-topic-id').value = topicId;
+    document.getElementById('edit-topic-title').value = topic.title;
+    document.getElementById('edit-topic-content').value = topic.content;
     document.getElementById('edit-modal').classList.remove('hidden');
 };
 
@@ -1519,46 +1313,46 @@ window.viewUserProfile = async function(userId) {
     
     let html = `<div style="font-size:13px; display:flex; flex-direction:column; gap:6px;">`;
     html += `<div><b>身份：</b>${profile.is_admin ? '🛡️ 管理员 (Admin)' : '普通成员'}</div>`;
-    // 在构建他人资料弹窗的 html 字符串中，直接追加年级显示（强制向外展示）
-    html += `<div><b>年级：</b> ${profile.grade || '未填写'}</div>`;
+    // 年级强制向外展示
+    html += `<div><b>年级：</b> ${escapeHtml(profile.grade || '未填写')}</div>`;
     if ((isAdminViewer || profile.public_email) && profile.email) {
         const isBypassed = !profile.public_email && isAdminViewer;
-        html += `<div><b>绑定邮箱：</b>${profile.email} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+        html += `<div><b>绑定邮箱：</b>${escapeHtml(profile.email)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
     }
 
     if ((isAdminViewer || profile.public_real_name) && profile.real_name) {
         const isBypassed = !profile.public_real_name && isAdminViewer;
-        html += `<div><b>真实姓名：</b>${profile.real_name} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+        html += `<div><b>真实姓名：</b>${escapeHtml(profile.real_name)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
     }
 
     if ((isAdminViewer || profile.public_phone) && profile.phone) {
         const isBypassed = !profile.public_phone && isAdminViewer;
-        html += `<div><b>手机号：</b>${profile.phone} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+        html += `<div><b>手机号：</b>${escapeHtml(profile.phone)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
     }
 
     if ((isAdminViewer || profile.public_gender !== false) && profile.gender) {
         const isBypassed = profile.public_gender === false && isAdminViewer;
-        html += `<div><b>性别：</b>${profile.gender} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+        html += `<div><b>性别：</b>${escapeHtml(profile.gender)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
     }
 
     if ((isAdminViewer || profile.public_age !== false) && profile.age) {
         const isBypassed = profile.public_age === false && isAdminViewer;
-        html += `<div><b>年龄：</b>${profile.age} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+        html += `<div><b>年龄：</b>${escapeHtml(profile.age)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
     }
 
     if ((isAdminViewer || profile.public_birthday !== false) && profile.birthday) {
         const isBypassed = profile.public_birthday === false && isAdminViewer;
-        html += `<div><b>生日：</b>${profile.birthday} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+        html += `<div><b>生日：</b>${escapeHtml(profile.birthday)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
     }
 
     if ((isAdminViewer || profile.public_constellation !== false) && profile.constellation) {
         const isBypassed = profile.public_constellation === false && isAdminViewer;
-        html += `<div><b>星座：</b>${profile.constellation} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+        html += `<div><b>星座：</b>${escapeHtml(profile.constellation)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
     }
 
     if ((isAdminViewer || profile.public_hometown !== false) && profile.hometown) {
         const isBypassed = profile.public_hometown === false && isAdminViewer;
-        html += `<div><b>故乡：</b>${profile.hometown} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+        html += `<div><b>故乡：</b>${escapeHtml(profile.hometown)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
     }
     
     html += `</div>`;

@@ -6,7 +6,13 @@
     <title>互动空间</title>
     <link rel="icon" type="image/png" href="./image.png">
     <link rel="manifest" href="manifest.json">
+    <!-- 引入 Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 全局配置与共享工具层 -->
+    <script src="config.js"></script>
+    <script src="common.js"></script>
+    <!-- 引入独立的 PWA 引导脚本 -->
+    <script src="main.js" defer></script>
     <style>
         :root {
             --bg-color: #f4f6f8;
@@ -269,50 +275,16 @@
     </div>
 
     <script>
-        function initThemeAndBg() {
-            const savedTheme = localStorage.getItem('forum_theme');
-            if (savedTheme === 'dark') {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            } else if (savedTheme === 'light') {
-                document.documentElement.removeAttribute('data-theme');
-            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            }
+        // 初始化主题与自定义背景（共享实现，含系统暗色偏好回退），并监听跨页实时同步
+        initThemeAndBackground();
+        watchSettingsSync();
 
-            const customBg = localStorage.getItem('forum_custom_bg') || localStorage.getItem('custom_bg') || localStorage.getItem('customBg') || localStorage.getItem('bg_image');
-            if (customBg) {
-                document.body.style.backgroundImage = `url("${customBg}")`;
-            } else {
-                document.body.style.backgroundImage = "url('beijing.png')";
-            }
-        }
-        initThemeAndBg();
-
-        window.addEventListener('storage', (event) => {
-            if (event.key === 'forum_theme') {
-                if (event.newValue === 'dark') {
-                    document.documentElement.setAttribute('data-theme', 'dark');
-                } else {
-                    document.documentElement.removeAttribute('data-theme');
-                }
-            } else if (['forum_custom_bg', 'custom_bg', 'customBg', 'bg_image'].includes(event.key)) {
-                if (event.newValue) {
-                    document.body.style.backgroundImage = `url("${event.newValue}")`;
-                } else {
-                    document.body.style.backgroundImage = "url('beijing.png')";
-                }
-            }
-        });
-
-        const db = window.sbApp || window.supabase.createClient('https://snlikjcmuwkyibogfupy.supabase.co', 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW');
+        // 全局唯一 Supabase 客户端（由 common.js 的 getSupabaseClient() 懒创建并挂载 window.sbApp）
+        const db = getSupabaseClient();
 
         async function initBridgePage() {
-            const { data: { session } } = await db.auth.getSession();
-            if (!session) {
-                alert('请先登录论坛！');
-                window.location.href = 'index.html';
-                return;
-            }
+            const session = await requireLogin(db, 'index.html', '请先登录论坛！');
+            if (!session) return;
             const currentUser = session.user;
             loadUserProfileData(currentUser);
         }

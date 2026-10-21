@@ -8,10 +8,13 @@
     <!-- PWA 应用清单 -->
     <link rel="manifest" href="manifest.json">
 
-    <!-- 引入独立的 PWA 引导脚本 -->
-    <script src="main.js" defer></script>
     <!-- 引入 Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 全局配置与共享工具层 -->
+    <script src="config.js"></script>
+    <script src="common.js"></script>
+    <!-- 引入独立的 PWA 引导脚本 -->
+    <script src="main.js" defer></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -41,10 +44,8 @@
     </div>
 
     <script>
-        const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
-        const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
-        
-        const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // 全局唯一 Supabase 客户端（由 common.js 的 getSupabaseClient() 懒创建并挂载 window.sbApp）
+        const db = getSupabaseClient();
 
         window.addEventListener('DOMContentLoaded', async () => {
             const titleEl = document.getElementById('status-title');

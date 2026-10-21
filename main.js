@@ -11,12 +11,13 @@ function urlBase64ToUint8Array(base64String) {
     return outputArray;
 }
 
-// 1. 全局唯一 Supabase 客户端初始化（彻底解决多实例警告）
-const SUPABASE_URL = 'https://snlikjcmuwkyibogfupy.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW';
-
-if (!window.sbApp && window.supabase) {
-    window.sbApp = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// 1. 全局唯一 Supabase 客户端：由 common.js 的 getSupabaseClient() 懒创建并挂载 window.sbApp
+//    main.js 以 defer 方式加载，仅作为全局单例的消费方，不再自行创建客户端
+function getLTClient() {
+    if (typeof window.getSupabaseClient === 'function') {
+        return window.getSupabaseClient();
+    }
+    return window.sbApp || null;
 }
 
 
@@ -72,8 +73,8 @@ let globalPresenceChannel = null;
 window.initGlobalPresence = async function(user) {
     if (!user || globalPresenceChannel) return;
     
-    // 确保 Supabase 实例存在
-    const client = window.sbApp || (window.supabase && window.supabase.createClient('https://snlikjcmuwkyibogfupy.supabase.co', 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW'));
+    // 确保 Supabase 实例存在（复用 common.js 全局单例）
+    const client = getLTClient();
     if (!client) return;
 
     try {
@@ -104,8 +105,8 @@ let heartbeatTimer = null;
 window.initUserHeartbeat = async function() {
     if (heartbeatTimer) return; // 避免重复启动
 
-    // 确保 Supabase 客户端存在
-    const client = window.sbApp || (window.supabase && window.supabase.createClient('https://snlikjcmuwkyibogfupy.supabase.co', 'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW'));
+    // 确保 Supabase 客户端存在（复用 common.js 全局单例）
+    const client = getLTClient();
     if (!client) return;
 
     try {

@@ -8,10 +8,13 @@
     <!-- PWA 应用清单 -->
     <link rel="manifest" href="manifest.json">
 
-    <!-- 引入独立的 PWA 引导脚本 -->
-    <script src="main.js" defer></script>
     <!-- 引入 Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 全局配置与共享工具层 -->
+    <script src="config.js"></script>
+    <script src="common.js"></script>
+    <!-- 引入独立的 PWA 引导脚本 -->
+    <script src="main.js" defer></script>
     <style>
         :root {
             --bg-color: #f4f6f8;
@@ -132,62 +135,14 @@
     </div>
 
     <script>
-        // 初始化主题与自定义背景（与 index.html 的实现逻辑保持一致）
-        function initThemeAndBg() {
-            // 1. 同步明暗模式主题状态
-            const savedTheme = localStorage.getItem('forum_theme');
-            if (savedTheme === 'dark') {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            } else if (savedTheme === 'light') {
-                document.documentElement.removeAttribute('data-theme');
-            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            }
+        // 初始化主题与自定义背景（共享实现，含系统暗色偏好回退），并监听跨页实时同步
+        initThemeAndBackground();
+        watchSettingsSync();
 
-            // 2. 匹配主页的自定义背景存储键名 forum_custom_bg（同时兼容其他备用键）
-            const customBg = localStorage.getItem('forum_custom_bg') || 
-                             localStorage.getItem('custom_bg') || 
-                             localStorage.getItem('customBg') || 
-                             localStorage.getItem('bg_image');
-
-            if (customBg) {
-                // 如果用户有自定义背景，则直接应用
-                document.body.style.backgroundImage = `url("${customBg}")`;
-            } else {
-                // 否则默认加载 beijing.png
-                document.body.style.backgroundImage = "url('beijing.png')";
-            }
-        }
-        initThemeAndBg();
-
-        // 监听 localStorage 跨页面实时同步事件
-        window.addEventListener('storage', (event) => {
-            if (event.key === 'forum_theme') {
-                if (event.newValue === 'dark') {
-                    document.documentElement.setAttribute('data-theme', 'dark');
-                } else {
-                    document.documentElement.removeAttribute('data-theme');
-                }
-            } else if (['forum_custom_bg', 'custom_bg', 'customBg', 'bg_image'].includes(event.key)) {
-                if (event.newValue) {
-                    document.body.style.backgroundImage = `url("${event.newValue}")`;
-                } else {
-                    document.body.style.backgroundImage = "url('beijing.png')";
-                }
-            }
-        });
-
-        // Supabase 配置（与主页保持一致）
-        // 各页面直接复用全局实例
-        const sbApp = window.sbApp;
+        // 全局唯一 Supabase 客户端（由 common.js 的 getSupabaseClient() 懒创建并挂载 window.sbApp）
+        const db = getSupabaseClient();
 
         async function submitFeedback() {
-
-            if (!sbApp) {
-                setTimeout(initSpace, 100);
-                return;
-            }
-            
             const contentInput = document.getElementById('feedback-content');
             const content = contentInput.value.trim();
 
@@ -197,12 +152,9 @@
             }
 
             // 检查当前用户是否登录
-            const { data: { session } } = await db.auth.getSession();
-            if (!session) {
-                alert('请先登录后再提交反馈！');
-                window.location.href = 'index.html';
-                return;
-            }
+            const session = await requireLogin(db, 'index.html', '请先登录后再提交反馈！');
+            if (!session) return;
+
             if (typeof window.initGlobalPresence === 'function') {
                 window.initGlobalPresence(session.user);
             }

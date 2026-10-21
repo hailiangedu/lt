@@ -7,10 +7,13 @@
     <link rel="icon" type="image/x-icon" href="https://school.hailiangedu.com/favicon.ico">
     <!-- PWA 应用清单 -->
     <link rel="manifest" href="manifest.json">
-    <!-- 引入独立的 PWA 引导脚本 -->
-    <script src="main.js" defer></script>
     <!-- 引入 Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 全局配置与共享工具层 -->
+    <script src="config.js"></script>
+    <script src="common.js"></script>
+    <!-- 引入独立的 PWA 引导脚本 -->
+    <script src="main.js" defer></script>
     <style>
         :root {
             --bg-color: #f4f6f8;
@@ -149,66 +152,21 @@
     </div>
 
     <script>
-        // 1. 初始化主题与自定义背景
-        function initThemeAndBg() {
-            const savedTheme = localStorage.getItem('forum_theme');
-            if (savedTheme === 'dark') {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            } else if (savedTheme === 'light') {
-                document.documentElement.removeAttribute('data-theme');
-            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            }
+        // 1. 初始化主题与自定义背景（共享实现，含系统暗色偏好回退），并监听跨页实时同步
+        initThemeAndBackground();
+        watchSettingsSync();
 
-            const customBg = localStorage.getItem('forum_custom_bg') || localStorage.getItem('custom_bg') || localStorage.getItem('customBg') || localStorage.getItem('bg_image');
-            if (customBg) {
-                document.body.style.backgroundImage = `url("${customBg}")`;
-            } else {
-                document.body.style.backgroundImage = "url('beijing.png')";
-            }
-        }
-        initThemeAndBg();
-
-        window.addEventListener('storage', (event) => {
-            if (event.key === 'forum_theme') {
-                if (event.newValue === 'dark') {
-                    document.documentElement.setAttribute('data-theme', 'dark');
-                } else {
-                    document.documentElement.removeAttribute('data-theme');
-                }
-            } else if (['forum_custom_bg', 'custom_bg', 'customBg', 'bg_image'].includes(event.key)) {
-                if (event.newValue) {
-                    document.body.style.backgroundImage = `url("${event.newValue}")`;
-                } else {
-                    document.body.style.backgroundImage = "url('beijing.png')";
-                }
-            }
-        });
-
-        // 2. 具备安全重试机制的初始化大厅逻辑
+        // 2. 初始化成员大厅（Supabase 客户端由共享层同步就绪，无需轮询等待）
         async function initSpace() {
             const container = document.getElementById('users-container');
             
-            // 安全获取全局实例：若 window.sbApp 还没准备好，则每 100ms 轮询检查一次，防止死循环
-            const sbApp = window.sbApp || (window.supabase && window.supabase.createClient(
-                'https://snlikjcmuwkyibogfupy.supabase.co', 
-                'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW'
-            ));
-            window.sbApp = sbApp;
-
-            if (!sbApp) {
-                setTimeout(initSpace, 100);
-                return;
-            }
+            // 全局唯一 Supabase 客户端（common.js 的 getSupabaseClient() 懒创建并挂载 window.sbApp）
+            const sbApp = getSupabaseClient();
 
             try {
                 // 1. 鉴权检查，确保用户已登录
-                const { data: { session }, error: sessionError } = await sbApp.auth.getSession();
-                if (sessionError || !session) {
-                    alert('请先登录论坛！');
-                    window.location.href = 'index.html';
-                    return;
-                }
+                const session = await requireLogin(sbApp, 'index.html', '请先登录论坛！');
+                if (!session) return;
                 const currentUser = session.user;
 
                 // 2. 获取所有 profiles 数据（包含 last_seen_at 字段）
@@ -244,11 +202,11 @@
                         card.innerHTML = `
                             <div class="user-info">
                                 <div style="display: flex; align-items: center; gap: 6px;">
-                                    <b style="font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${user.nickname || '未命名用户'}</b>
+                                    <b style="font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(user.nickname || '未命名用户')}</b>
                                     ${user.is_admin ? '<span class="badge-admin">管理员</span>' : ''}
                                 </div>
                                 <div class="user-meta">
-                                    <span>年级：${user.grade || '未填'}</span>
+                                    <span>年级：${escapeHtml(user.grade || '未填')}</span>
                                 </div>
                             </div>
                             <div style="font-size: 12px; display: flex; align-items: center; gap: 4px; flex-shrink: 0;">

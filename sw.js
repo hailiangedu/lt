@@ -1,11 +1,15 @@
-const CACHE_NAME = 'hailiang-forum-v2';
+const CACHE_NAME = 'hailiang-forum-v3';
 const assetsToCache = [
     './index.html',
     './bridge.html',
     './confirm.html',
     './feedback.html',
     './space.html',
+    './checkin.html',
+    './config.js',
+    './common.js',
     './main.js',
+    './beijing.png',
     './image.png',
     './icon.png',
     'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'

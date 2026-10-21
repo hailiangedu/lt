@@ -7,10 +7,13 @@
     <link rel="icon" type="image/x-icon" href="https://school.hailiangedu.com/favicon.ico">
     <!-- PWA 应用清单 -->
     <link rel="manifest" href="manifest.json">
-    <!-- 引入独立的 PWA 引导脚本 -->
-    <script src="main.js" defer></script>
     <!-- 引入 Supabase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 全局配置与共享工具层 -->
+    <script src="config.js"></script>
+    <script src="common.js"></script>
+    <!-- 引入独立的 PWA 引导脚本 -->
+    <script src="main.js" defer></script>
     <style>
         :root {
             --bg-color: #f4f6f8;
@@ -188,41 +191,9 @@
     </div>
 
     <script>
-        // 1. 初始化主题与自定义背景
-        function initThemeAndBg() {
-            const savedTheme = localStorage.getItem('forum_theme');
-            if (savedTheme === 'dark') {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            } else if (savedTheme === 'light') {
-                document.documentElement.removeAttribute('data-theme');
-            } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-                document.documentElement.setAttribute('data-theme', 'dark');
-            }
-
-            const customBg = localStorage.getItem('forum_custom_bg') || localStorage.getItem('custom_bg') || localStorage.getItem('customBg') || localStorage.getItem('bg_image');
-            if (customBg) {
-                document.body.style.backgroundImage = `url("${customBg}")`;
-            } else {
-                document.body.style.backgroundImage = "url('beijing.png')";
-            }
-        }
-        initThemeAndBg();
-
-        window.addEventListener('storage', (event) => {
-            if (event.key === 'forum_theme') {
-                if (event.newValue === 'dark') {
-                    document.documentElement.setAttribute('data-theme', 'dark');
-                } else {
-                    document.documentElement.removeAttribute('data-theme');
-                }
-            } else if (['forum_custom_bg', 'custom_bg', 'customBg', 'bg_image'].includes(event.key)) {
-                if (event.newValue) {
-                    document.body.style.backgroundImage = `url("${event.newValue}")`;
-                } else {
-                    document.body.style.backgroundImage = "url('beijing.png')";
-                }
-            }
-        });
+        // 1. 初始化主题与自定义背景（共享实现，含系统暗色偏好回退），并监听跨页实时同步
+        initThemeAndBackground();
+        watchSettingsSync();
 
         // 2. Supabase 签到及排行榜逻辑
         // 精准计算标准 UTC+8 日期字符串 (YYYY-MM-DD)，彻底解决跨天不刷新或时区偏差问题
@@ -238,43 +209,27 @@
             return `${year}-${month}-${day}`;
         }
 
-        // 获取全局统一的 Supabase 实例
-        function getSupabase() {
-            if (window.sbApp) return window.sbApp;
-            if (window.supabase) {
-                window.sbApp = window.supabase.createClient(
-                    'https://snlikjcmuwkyibogfupy.supabase.co', 
-                    'sb_publishable_8stbmdXfZMtBGjwaq16ajw_KBDzE9ZW'
-                );
-                return window.sbApp;
-            }
-            return null;
-        }
+        // 全局唯一 Supabase 客户端（common.js 的 getSupabaseClient() 懒创建并挂载 window.sbApp，无需轮询等待）
+        const db = getSupabaseClient();
 
         let cachedToday = getTodayString();
 
         async function initCheckInPage() {
-            const client = getSupabase();
-            if (!client) {
-                setTimeout(initCheckInPage, 100);
-                return;
-            }
             await checkUserStatus();
             await loadRankings();
         }
 
         // 检查当前用户今天是否已经签到
         async function checkUserStatus() {
-            const client = getSupabase();
-            if (!client) return;
+            if (!db) return;
 
-            const { data: { session } } = await client.auth.getSession();
+            const { data: { session } } = await db.auth.getSession();
             if (!session) return;
 
             const userId = session.user.id;
             const todayStr = getTodayString();
 
-            const { data, error } = await client
+            const { data, error } = await db
                 .from('checkins')
                 .select('*')
                 .eq('user_id', userId)
@@ -293,25 +248,20 @@
 
         // 执行签到
         async function handleCheckIn() {
-            const client = getSupabase();
-            if (!client) {
+            if (!db) {
                 alert('系统正在初始化，请稍后再试！');
                 return;
             }
 
-            const { data: { session } } = await client.auth.getSession();
-            if (!session) {
-                alert('请先登录后再进行签到！');
-                window.location.href = 'index.html';
-                return;
-            }
+            const session = await requireLogin(db, 'index.html', '请先登录后再进行签到！');
+            if (!session) return;
 
             const userId = session.user.id;
             const btn = document.getElementById('checkin-btn');
             btn.disabled = true;
 
             // 直接调用后端 RPC（日期由后端通过 SQL 统一生成，保证绝对准确）
-            const { data, error } = await client.rpc('perform_checkin', {
+            const { data, error } = await db.rpc('perform_checkin', {
                 p_user_id: userId
             });
 
@@ -333,13 +283,12 @@
 
         // 加载今日排行榜
         async function loadRankings() {
-            const client = getSupabase();
-            if (!client) return;
+            if (!db) return;
 
             const todayStr = getTodayString();
             const rankListEl = document.getElementById('rank-list');
 
-            const { data, error } = await client
+            const { data, error } = await db
                 .from('checkins')
                 .select(`
                     rank,
@@ -374,13 +323,6 @@
                     </li>
                 `;
             }).join('');
-        }
-
-        // HTML 转义防注入
-        function escapeHtml(str) {
-            return str.replace(/[&<>'"]/g, 
-                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
-            );
         }
 
         // 监听页面重新获得焦点（例如用户半夜挂着网页，过零点后切回页面），自动重新检测日期并刷新签到与排行状态
