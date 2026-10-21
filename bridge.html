@@ -150,6 +150,7 @@
             border: 3px solid var(--primary-color);
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             background-color: #fff;
+            cursor: pointer;
         }
         .level-badge {
             display: inline-block;
@@ -184,8 +185,11 @@
 
         <div class="card">
             <div class="avatar-container">
-                <img id="user-avatar" src="icon.png" alt="用户头像" class="avatar-img">
+                <!-- 点击头像本身触发隐藏的文件选择器，实现自定义头像更换 -->
+                <img id="user-avatar" src="icon.png" alt="用户头像" class="avatar-img" title="点击更换头像">
+                <input type="file" id="avatar-file-input" accept="image/*" style="display: none;">
                 <div id="user-nickname-title" style="font-weight: bold; font-size: 18px; margin-top: 10px;">加载中...</div>
+                <div id="avatar-msg" style="font-size: 11px; color: var(--meta-color); margin-top: 5px;"></div>
             </div>
             
             <div style="text-align: center; margin-bottom: 15px;">
@@ -282,10 +286,15 @@
         // 全局唯一 Supabase 客户端（由 common.js 的 getSupabaseClient() 懒创建并挂载 window.sbApp）
         const db = getSupabaseClient();
 
+        // 页面级当前登录用户引用（initBridgePage 登录门禁通过后赋值，供头像上传等页面私有逻辑使用）
+        let bridgeCurrentUser = null;
+
         async function initBridgePage() {
             const session = await requireLogin(db, 'index.html', '请先登录论坛！');
             if (!session) return;
             const currentUser = session.user;
+            // 保存页面级用户引用，供头像上传等页面私有逻辑使用
+            bridgeCurrentUser = currentUser;
             loadUserProfileData(currentUser);
         }
 
@@ -307,7 +316,11 @@
             const level = data.level || 1;
             document.getElementById('user-level-tag').innerText = `Lv.${level} (当前经验: ${exp})`;
 
-            document.getElementById('user-avatar').src = data.avatar_url || 'icon.png';
+            // 头像显示白名单：仅采用以 data:image/ 或 http 开头的取值（兼容新压缩数据/历史 Base64/外链），
+            // 空值与脏数据一律回退默认图标 icon.png
+            const avatarUrl = typeof data.avatar_url === 'string' ? data.avatar_url : '';
+            document.getElementById('user-avatar').src =
+                (avatarUrl.startsWith('data:image/') || avatarUrl.startsWith('http')) ? avatarUrl : 'icon.png';
 
             const fields = ['real_name', 'phone', 'gender', 'age', 'birthday', 'constellation', 'hometown'];
             fields.forEach(field => {
@@ -326,6 +339,146 @@
                 }
             });
         }
+
+        // ==================== 自定义头像（点击头像更换，恢复自历史版本并新增压缩） ====================
+
+        // 头像提示自动消失定时器
+        let avatarMsgTimer = null;
+
+        // 设置头像操作提示文本与颜色；autoHide 为 true 时 5 秒后自动清空（成功与失败提示一致）
+        function setAvatarMsg(text, color, autoHide) {
+            const msgEl = document.getElementById('avatar-msg');
+            if (avatarMsgTimer) {
+                clearTimeout(avatarMsgTimer);
+                avatarMsgTimer = null;
+            }
+            msgEl.innerText = text;
+            msgEl.style.color = color;
+            if (autoHide && text) {
+                avatarMsgTimer = setTimeout(() => {
+                    msgEl.innerText = '';
+                    avatarMsgTimer = null;
+                }, 5000);
+            }
+        }
+
+        // 将选定图片压缩为头像数据 URL：中心方形裁剪缩放至 256×256，JPEG 输出，
+        // 质量阶梯 0.85→0.7→0.5→0.3 逐级降质兜底，保证压缩结果不超过 150KB。
+        // 非图片文件 / 源文件超 20MB / 解码失败时 reject（错误信息面向用户可读）。
+        function compressImageToAvatar(file) {
+            return new Promise((resolve, reject) => {
+                // 防护 1：仅接受图片类型
+                if (!file.type || !file.type.startsWith('image/')) {
+                    reject(new Error('请选择图片文件'));
+                    return;
+                }
+                // 防护 2：拒绝超大源文件，避免拖垮读取与解码内存
+                if (file.size > 20 * 1024 * 1024) {
+                    reject(new Error('图片文件过大（超过 20MB），请更换较小的图片'));
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onerror = () => reject(new Error('读取图片文件失败，请重试'));
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onerror = () => reject(new Error('图片解码失败，文件可能已损坏，请更换图片'));
+                    img.onload = () => {
+                        try {
+                            // 中心方形裁剪：取图片中央正方形区域，保证任意比例照片在圆形头像框内构图正确
+                            const side = Math.min(img.naturalWidth || 0, img.naturalHeight || 0);
+                            if (!side) {
+                                reject(new Error('图片解码失败，文件可能已损坏，请更换图片'));
+                                return;
+                            }
+                            const sx = (img.naturalWidth - side) / 2;
+                            const sy = (img.naturalHeight - side) / 2;
+
+                            const canvas = document.createElement('canvas');
+                            canvas.width = 256;
+                            canvas.height = 256;
+                            const ctx = canvas.getContext('2d');
+                            // 先铺白底，防止透明 PNG 转 JPEG 后透明区域变黑
+                            ctx.fillStyle = '#ffffff';
+                            ctx.fillRect(0, 0, 256, 256);
+                            ctx.drawImage(img, sx, sy, side, side, 0, 0, 256, 256);
+
+                            // 质量阶梯：0.85 → 0.7 → 0.5 → 0.3，逐级降质直至结果 ≤150KB
+                            const MAX_AVATAR_BYTES = 150 * 1024;
+                            const qualities = [0.85, 0.7, 0.5, 0.3];
+                            let dataUrl = '';
+                            for (let i = 0; i < qualities.length; i++) {
+                                dataUrl = canvas.toDataURL('image/jpeg', qualities[i]);
+                                if (dataUrl.length <= MAX_AVATAR_BYTES) break;
+                            }
+                            resolve(dataUrl);
+                        } catch (err) {
+                            reject(new Error('图片压缩处理失败，请更换图片重试'));
+                        }
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // 将头像数据 URL 持久化到当前登录用户的 profiles.avatar_url（RLS 保证仅本人可改）
+        async function persistAvatar(dataUrl) {
+            const { error } = await db.from('profiles').update({ avatar_url: dataUrl }).eq('id', bridgeCurrentUser.id);
+            if (error) {
+                throw new Error('头像更新到数据库失败: ' + error.message);
+            }
+        }
+
+        // 头像上传防重入标志（处理进行中忽略再次触发）
+        let avatarUploading = false;
+
+        // 头像上传主流程：压缩 → 保存成功后再更新显示。
+        // 关键顺序约束：先压缩保存成功、再更新头像显示，避免历史"保存失败但头像已变"的不一致问题。
+        async function handleAvatarFileSelected(input) {
+            // 双重保险：登录门禁未通过（bridgeCurrentUser 为空）时不处理，跳转交由 requireLogin 负责
+            if (!bridgeCurrentUser) {
+                input.value = '';
+                return;
+            }
+            const file = input.files && input.files[0];
+            // 用户在文件选择器中取消选择：无任何变化与提示
+            if (!file) {
+                input.value = '';
+                return;
+            }
+            if (avatarUploading) {
+                input.value = '';
+                return;
+            }
+
+            avatarUploading = true;
+            setAvatarMsg('保存中...', 'var(--meta-color)');
+            try {
+                const dataUrl = await compressImageToAvatar(file);
+                await persistAvatar(dataUrl);
+                // 压缩与保存均已成功，此时才更新头像显示
+                document.getElementById('user-avatar').src = dataUrl;
+                setAvatarMsg('头像已成功更新并保存！', 'green', true);
+            } catch (err) {
+                setAvatarMsg(err.message || '头像更新失败，请重试', 'red', true);
+            } finally {
+                avatarUploading = false;
+                // 重置 input，确保同一文件可以被重复选择
+                input.value = '';
+            }
+        }
+
+        // 点击头像本身触发隐藏的文件选择器（登录门禁未通过时不提供更换入口）
+        document.getElementById('user-avatar').addEventListener('click', () => {
+            if (!bridgeCurrentUser) return;
+            document.getElementById('avatar-file-input').click();
+        });
+
+        // 文件选定后进入上传主流程
+        document.getElementById('avatar-file-input').addEventListener('change', function () {
+            handleAvatarFileSelected(this);
+        });
 
         initBridgePage();
     </script>

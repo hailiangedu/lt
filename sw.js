@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hailiang-forum-v3';
+const CACHE_NAME = 'hailiang-forum-v4';
 const assetsToCache = [
     './index.html',
     './bridge.html',
