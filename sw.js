@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hailiang-forum-v4';
+const CACHE_NAME = 'hailiang-forum-v5';
 const assetsToCache = [
     './index.html',
     './bridge.html',
@@ -9,6 +9,7 @@ const assetsToCache = [
     './config.js',
     './common.js',
     './main.js',
+    './index.js',
     './beijing.png',
     './image.png',
     './icon.png',
@@ -41,7 +42,7 @@ self.addEventListener('activate', event => {
     );
 });
 
-// 3. 网络优先策略（Network First），带优雅兜底（已修复 POST 请求无法缓存的报错）
+// 3. 请求分层策略：同源静态资源 stale-while-revalidate（缓存即时响应 + 后台静默更新），其余请求网络优先
 self.addEventListener('fetch', event => {
     // 仅处理 http/https 请求
     if (!event.request.url.startsWith('http')) return;
@@ -50,7 +51,52 @@ self.addEventListener('fetch', event => {
     if (event.request.url.includes('supabase.co')) {
         return;
     }
-    
+
+    // 同源静态资源（js/css/图片/图标/manifest 等）：stale-while-revalidate
+    // 命中缓存立即返回（本地毫秒级响应），同时后台静默拉取最新版本写入缓存，下次访问生效
+    const requestUrl = new URL(event.request.url);
+    if (event.request.method === 'GET' &&
+        requestUrl.origin === self.location.origin &&
+        /\.(js|mjs|css|png|jpe?g|gif|svg|webp|ico|json)$/.test(requestUrl.pathname)) {
+        event.respondWith(
+            caches.match(event.request).then(cachedResponse => {
+                if (cachedResponse) {
+                    // 后台静默更新缓存：成功则下次访问生效，失败静默忽略，不影响本次已返回的缓存响应
+                    fetch(event.request)
+                        .then(networkResponse => {
+                            if (networkResponse && networkResponse.status === 200) {
+                                const responseClone = networkResponse.clone();
+                                caches.open(CACHE_NAME).then(cache => {
+                                    cache.put(event.request, responseClone);
+                                });
+                            }
+                        })
+                        .catch(() => {});
+                    return cachedResponse;
+                }
+                // 缓存未命中：走网络，成功则写入缓存并返回，失败返回 404（沿用原有失败语义）
+                return fetch(event.request)
+                    .then(networkResponse => {
+                        if (networkResponse && networkResponse.status === 200) {
+                            const responseClone = networkResponse.clone();
+                            caches.open(CACHE_NAME).then(cache => {
+                                cache.put(event.request, responseClone);
+                            });
+                        }
+                        return networkResponse;
+                    })
+                    .catch(() => {
+                        return new Response('Network error or resource not found', {
+                            status: 404,
+                            statusText: 'Not Found'
+                        });
+                    });
+            })
+        );
+        return;
+    }
+
+    // 其余请求（HTML 导航、跨源 CDN 等）：网络优先 + 缓存兜底（原有逻辑保持不变）
     event.respondWith(
         fetch(event.request)
             .then(networkResponse => {
