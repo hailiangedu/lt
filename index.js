@@ -127,7 +127,10 @@ window.trySyncPushSubscription = async function() {
 
 async function initUserSession(user) {
     currentAuthUser = user; 
-    
+
+    // 临时档案先行：资料返回前，所有档案依赖方（openProfile / 发帖 / 评论等）拿到合法兜底值（is_admin: false = 管理入口安全默认隐藏）
+    currentUserProfile = { nickname: user.email.split('@')[0], is_admin: false, email: user.email };
+
     // 1. 尝试同步推送订阅到数据库（此时 db 和 user 均已 100% 就绪）
     if (typeof window.trySyncPushSubscription === 'function') {
         window.trySyncPushSubscription();
@@ -137,12 +140,32 @@ async function initUserSession(user) {
     if (window.syncUserIdToSW) {
         window.syncUserIdToSW(user.id);
     }
-    const { data } = await db.from('profiles').select('*').eq('id', user.id).single();
-    currentUserProfile = data || { nickname: user.email.split('@')[0], is_admin: false, email: user.email };
-    if (!currentUserProfile.email) currentUserProfile.email = user.email;
-    
-    document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${escapeHtml(currentUserProfile.nickname)}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
+
+    // 论坛先显示：不再被 profiles 查询的网络往返阻塞，分类/列表加载（loadCategories）立即启动
+    showForum();
+    // 未读红点检查与在线状态上报均为 fire-and-forget，提前执行
     checkUnreadNotifications(user.id);
+    if (typeof window.initGlobalPresence === 'function') {
+        window.initGlobalPresence(user);
+    }
+
+    // 唯一阻塞点：拉取真实档案。成功则以真实资料覆盖临时档案（email 为空则回填，保持原语义）；失败（data null / 网络异常）保留临时档案兜底
+    let profileData = null;
+    try {
+        const { data } = await db.from('profiles').select('*').eq('id', user.id).single();
+        profileData = data;
+    } catch (e) {
+        // 网络异常等极端情况：静默保留临时档案，论坛照常可用
+    }
+    if (profileData) {
+        currentUserProfile = profileData;
+        if (!currentUserProfile.email) currentUserProfile.email = user.email;
+    }
+
+    // 登出竞态守卫：查询期间已登出/切换账号（currentAuthUser 已不是该 user）则放弃填充，避免向已登出界面写入档案内容
+    if (!currentAuthUser || currentAuthUser.id !== user.id) return;
+
+    document.getElementById('user-profile-summary').innerHTML = `欢迎回来，<b>${escapeHtml(currentUserProfile.nickname)}</b> <span class="badge-admin">${currentUserProfile.is_admin ? '管理员' : '成员'}</span>`;
     
     const toggleBtn = document.getElementById('post-mode-toggle');
     if (toggleBtn) {
@@ -160,12 +183,6 @@ async function initUserSession(user) {
             el.classList.add('hidden');
         }
     });
-
-    if (typeof window.initGlobalPresence === 'function') {
-        window.initGlobalPresence(user);
-    }
-
-    showForum();
 }
 
 async function checkUnreadNotifications(userId) {

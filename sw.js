@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hailiang-forum-v5';
+const CACHE_NAME = 'hailiang-forum-v6';
 const assetsToCache = [
     './index.html',
     './bridge.html',
@@ -42,7 +42,7 @@ self.addEventListener('activate', event => {
     );
 });
 
-// 3. 请求分层策略：同源静态资源 stale-while-revalidate（缓存即时响应 + 后台静默更新），其余请求网络优先
+// 3. 请求分层策略：同源静态资源 + jsdelivr CDN 白名单（Supabase SDK）stale-while-revalidate（缓存即时响应 + 后台静默更新），其余请求网络优先
 self.addEventListener('fetch', event => {
     // 仅处理 http/https 请求
     if (!event.request.url.startsWith('http')) return;
@@ -52,12 +52,17 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // 同源静态资源（js/css/图片/图标/manifest 等）：stale-while-revalidate
+    // 同源静态资源（js/css/图片/图标/manifest 等）与 jsdelivr CDN 白名单资源（Supabase SDK）：stale-while-revalidate
     // 命中缓存立即返回（本地毫秒级响应），同时后台静默拉取最新版本写入缓存，下次访问生效
     const requestUrl = new URL(event.request.url);
-    if (event.request.method === 'GET' &&
-        requestUrl.origin === self.location.origin &&
-        /\.(js|mjs|css|png|jpe?g|gif|svg|webp|ico|json)$/.test(requestUrl.pathname)) {
+    // 同源 + 静态扩展名
+    const isSameOriginStatic = requestUrl.origin === self.location.origin &&
+        /\.(js|mjs|css|png|jpe?g|gif|svg|webp|ico|json)$/.test(requestUrl.pathname);
+    // jsdelivr 白名单（跨源）：域名 + 扩展名/包路径双重收窄——.js 资源与 @supabase/supabase-js 包
+    // （SDK 引用 URL 形如 /npm/@supabase/supabase-js@2，不带 .js 后缀，故按包路径匹配；主版本升级 @2→@3 仍命中）
+    const isJsdelivrWhitelisted = requestUrl.hostname === 'cdn.jsdelivr.net' &&
+        (/\.js$/.test(requestUrl.pathname) || /^\/npm\/@supabase\/supabase-js(@|$)/.test(requestUrl.pathname));
+    if (event.request.method === 'GET' && (isSameOriginStatic || isJsdelivrWhitelisted)) {
         event.respondWith(
             caches.match(event.request).then(cachedResponse => {
                 if (cachedResponse) {
