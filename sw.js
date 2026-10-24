@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hailiang-forum-v6';
+const CACHE_NAME = 'hailiang-forum-v7';
 const assetsToCache = [
     './index.html',
     './bridge.html',
@@ -6,6 +6,7 @@ const assetsToCache = [
     './feedback.html',
     './space.html',
     './checkin.html',
+    './profile.html',
     './config.js',
     './common.js',
     './main.js',

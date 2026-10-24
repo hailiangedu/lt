@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人主页</title>
+    <link rel="icon" type="image/png" href="./image.png">
+    <!-- PWA 应用清单 -->
+    <link rel="manifest" href="manifest.json">
+    <!-- 引入 Supabase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- 全局配置与共享工具层 -->
+    <script src="config.js"></script>
+    <script src="common.js"></script>
+    <!-- 引入独立的 PWA 引导脚本 -->
+    <script src="main.js" defer></script>
+    <style>
+        :root {
+            --bg-color: #f4f6f8;
+            --text-color: #2d3748;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --border-color: rgba(226, 232, 240, 0.6);
+            --primary-color: #3182ce;
+            --meta-color: #718096;
+            --hover-bg: #ebf8ff;
+            --admin-badge: #e53e3e;
+            --online-color: #48bb78;
+            --offline-color: #a0aec0;
+        }
+        [data-theme="dark"] {
+            --bg-color: #1a202c;
+            --text-color: #f7fafc;
+            --card-bg: rgba(45, 55, 72, 0.85);
+            --border-color: rgba(74, 85, 104, 0.6);
+            --primary-color: #63b3ed;
+            --meta-color: #a0aec0;
+            --hover-bg: #2c5282;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            background-image: url('beijing.png');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 950px;
+            margin: 0 auto;
+        }
+        .card {
+            background-color: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        }
+        .flex {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .hidden { display: none !important; }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button:hover { opacity: 0.9; }
+        .badge-admin {
+            background-color: var(--admin-badge);
+            color: white;
+            font-size: 10px;
+            padding: 1px 5px;
+            border-radius: 4px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            flex-shrink: 0;
+        }
+        .status-dot.online {
+            background-color: var(--online-color);
+            box-shadow: 0 0 4px var(--online-color);
+        }
+        .status-dot.offline {
+            background-color: var(--offline-color);
+        }
+        .avatar-img {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--border-color);
+            flex-shrink: 0;
+        }
+        .profile-head {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        .profile-basic {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            overflow: hidden;
+        }
+        .meta-line {
+            font-size: 13px;
+            color: var(--meta-color);
+        }
+        .footprint-item {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+        }
+        .footprint-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        .clickable-title {
+            color: var(--primary-color);
+            cursor: pointer;
+        }
+        .clickable-title:hover { text-decoration: underline; }
+        .load-more-btn {
+            display: block;
+            margin: 12px auto 0;
+            padding: 6px 20px;
+            font-size: 12px;
+        }
+        /* 移动端：卡片内边距与头像缩放，三卡自然堆叠 */
+        @media (max-width: 768px) {
+            body { font-size: 12px; padding: 6px; }
+            .card { padding: 12px; margin-bottom: 8px; border-radius: 8px; }
+            h2 { font-size: 1.1rem; }
+            h3 { font-size: 0.95rem; }
+            .avatar-img { width: 56px; height: 56px; }
+            .profile-head { gap: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 顶部导航卡：返回论坛 + 主页标题 + 在线状态 -->
+        <div class="card flex">
+            <div>
+                <h2 id="profile-page-title" style="margin:0;">个人主页</h2>
+                <span id="profile-online-status" style="font-size: 12px; color: var(--meta-color);">加载中...</span>
+            </div>
+            <button onclick="window.location.href='index.html'" style="background:#4a5568;">返回论坛</button>
+        </div>
+
+        <!-- 用户不存在空状态（id 缺失/用户不存在/已注销），含返回论坛按钮 -->
+        <div id="user-not-found" class="card hidden" style="text-align: center; padding: 40px 20px;">
+            <p style="font-size: 15px; color: var(--meta-color); margin: 0 0 16px 0;">用户不存在或已注销</p>
+            <button onclick="window.location.href='index.html'">返回论坛</button>
+        </div>
+
+        <!-- 加载异常空状态（网络异常等极端情况） -->
+        <div id="profile-error" class="card hidden" style="text-align: center; padding: 40px 20px;">
+            <p style="font-size: 15px; color: var(--meta-color); margin: 0 0 16px 0;">加载失败，请检查网络或刷新页面</p>
+            <button onclick="window.location.reload()">刷新重试</button>
+        </div>
+
+        <!-- 主页内容（加载成功后展示） -->
+        <div id="profile-content" class="hidden">
+            <!-- 资料卡：始终公开区（头像/昵称/管理员徽章/年级/等级经验/签到天数） -->
+            <div class="card">
+                <div class="profile-head">
+                    <img id="p-avatar" src="icon.png" alt="用户头像" class="avatar-img">
+                    <div class="profile-basic">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <h3 id="p-nickname" style="margin: 0;">加载中...</h3>
+                            <span id="p-admin-badge" class="badge-admin hidden">管理员</span>
+                        </div>
+                        <div class="meta-line" id="p-grade-line">年级：加载中...</div>
+                        <div class="meta-line" id="p-level-line">等级：加载中...</div>
+                        <div class="meta-line" id="p-checkin-line">签到：加载中...</div>
+                    </div>
+                </div>
+                <!-- 自己视角：编辑资料入口（复用论坛页现有个人中心编辑面板） -->
+                <div id="p-edit-btn-wrap" class="hidden" style="margin-top: 12px;">
+                    <button onclick="window.location.href='index.html?edit=1'">编辑资料</button>
+                </div>
+            </div>
+
+            <!-- 详细资料卡：三档视角（自己全可见 / 他人按隐私开关+管理员特权口径） -->
+            <div class="card">
+                <h3 style="margin-top: 0;">详细资料</h3>
+                <div id="detail-info" style="font-size: 13px;">加载中...</div>
+            </div>
+
+            <!-- 话题足迹卡 -->
+            <div class="card">
+                <div class="flex">
+                    <h3 style="margin: 0;">话题足迹</h3>
+                    <span style="font-size: 12px; color: var(--meta-color);">最新在前</span>
+                </div>
+                <div id="topics-footprint" style="margin-top: 8px;">加载中...</div>
+                <button id="load-more-topics" class="load-more-btn hidden" onclick="window.loadMoreTopics()">加载更多话题</button>
+            </div>
+
+            <!-- 评论足迹卡 -->
+            <div class="card">
+                <div class="flex">
+                    <h3 style="margin: 0;">评论足迹</h3>
+                    <span style="font-size: 12px; color: var(--meta-color);">最新在前</span>
+                </div>
+                <div id="comments-footprint" style="margin-top: 8px;">加载中...</div>
+                <button id="load-more-comments" class="load-more-btn hidden" onclick="window.loadMoreComments()">加载更多评论</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. 初始化主题与自定义背景（共享实现，含系统暗色偏好回退），并监听跨页实时同步
+        initThemeAndBackground();
+        watchSettingsSync();
+
+        // 2. 个人主页逻辑（US1）：四路并行加载 + 三档视角详细资料 + 双足迹卡
+        // 全局唯一 Supabase 客户端（common.js 的 getSupabaseClient() 懒创建并挂载 window.sbApp）
+        const db = getSupabaseClient();
+
+        const PAGE_SIZE = 10;     // 话题/评论足迹每页条数（首屏限量 + 加载更多）
+        let targetUserId = null;  // 目标成员 id（URL ?id= 参数）
+        let topicOffset = 0;      // 话题足迹偏移（随"加载更多"递增）
+        let commentOffset = 0;    // 评论足迹偏移（随"加载更多"递增）
+        let categoriesMap = {};   // 板块 id → 板块名（话题足迹展示板块名）
+        let viewerSession = null; // 当前登录会话（判定自己视角与邮箱回填）
+
+        // 头像显示白名单：仅采用以 data:image/ 或 http 开头的取值（兼容新压缩数据/历史 Base64/外链），
+        // 空值与脏数据一律回退默认图标 icon.png（同 bridge.html 口径）
+        function avatarSrc(avatarUrl) {
+            const url = typeof avatarUrl === 'string' ? avatarUrl : '';
+            return (url.startsWith('data:image/') || url.startsWith('http')) ? url : 'icon.png';
+        }
+
+        // 用户不存在空状态（id 缺失/用户不存在/已注销），含返回论坛按钮
+        function showNotFound() {
+            document.getElementById('profile-content').classList.add('hidden');
+            document.getElementById('user-not-found').classList.remove('hidden');
+            document.getElementById('profile-page-title').innerText = '个人主页';
+            document.getElementById('profile-online-status').innerText = '';
+        }
+
+        // 加载异常空状态（网络异常等极端情况，不白屏）
+        function showErrorState() {
+            document.getElementById('profile-content').classList.add('hidden');
+            document.getElementById('profile-error').classList.remove('hidden');
+        }
+
+        // 始终公开区渲染：头像/昵称/管理员徽章/年级/等级经验/签到天数/在线状态
+        function renderPublicSection(profile, checkinCount, isSelf) {
+            // 头像显示白名单（同 bridge.html 口径），经 src 属性赋值无注入风险
+            document.getElementById('p-avatar').src = avatarSrc(profile.avatar_url);
+            document.getElementById('p-nickname').innerText = profile.nickname || '未命名用户';
+            const adminBadge = document.getElementById('p-admin-badge');
+            if (profile.is_admin) {
+                adminBadge.classList.remove('hidden');
+            } else {
+                adminBadge.classList.add('hidden');
+            }
+            document.getElementById('p-grade-line').innerText = `年级：${profile.grade || '未填写'}`;
+            document.getElementById('p-level-line').innerText = `等级：Lv.${profile.level || 1}（当前经验：${profile.exp || 0}）`;
+            document.getElementById('p-checkin-line').innerText = `累计签到：${checkinCount} 天`;
+
+            // 在线状态：last_seen_at 60 秒阈值（同 space.html 口径），本人强制在线
+            let isOnline = false;
+            if (isSelf) {
+                isOnline = true;
+            } else if (profile.last_seen_at) {
+                isOnline = (Date.now() - new Date(profile.last_seen_at).getTime()) < 60000;
+            }
+            document.getElementById('profile-online-status').innerHTML =
+                `<span class="status-dot ${isOnline ? 'online' : 'offline'}"></span> ${isOnline ? '在线' : '离线'}`;
+
+            // 页面标题随昵称更新（可刷新可分享）
+            const pageTitle = `${profile.nickname || '用户'} 的个人主页`;
+            document.getElementById('profile-page-title').innerText = pageTitle;
+            document.title = pageTitle;
+
+            // 自己视角：显示"编辑资料"入口（跳转现有个人中心编辑面板）
+            if (isSelf) {
+                document.getElementById('p-edit-btn-wrap').classList.remove('hidden');
+            }
+        }
+
+        // 详细资料渲染：三档视角（plan R&D-D1）——自己全字段可见；他人逐条件复刻 index.js 原 viewUserProfile 隐私口径
+        function renderDetailSection(profile, isSelf, isAdminViewer) {
+            const container = document.getElementById('detail-info');
+            let html = `<div style="font-size:13px; display:flex; flex-direction:column; gap:6px;">`;
+            html += `<div><b>身份：</b>${profile.is_admin ? '🛡️ 管理员 (Admin)' : '普通成员'}</div>`;
+            // 年级强制向外展示
+            html += `<div><b>年级：</b> ${escapeHtml(profile.grade || '未填写')}</div>`;
+
+            if (isSelf) {
+                // 自己视角：全部字段可见（与个人中心编辑面板一致；邮箱为空回退登录邮箱）
+                html += `<div><b>绑定邮箱：</b>${escapeHtml(profile.email || (viewerSession && viewerSession.user.email) || '未填写')}</div>`;
+                html += `<div><b>真实姓名：</b>${escapeHtml(profile.real_name || '未填写')}</div>`;
+                html += `<div><b>手机号：</b>${escapeHtml(profile.phone || '未填写')}</div>`;
+                html += `<div><b>性别：</b>${escapeHtml(profile.gender || '未填写')}</div>`;
+                html += `<div><b>年龄：</b>${escapeHtml(profile.age || '未填写')}</div>`;
+                html += `<div><b>生日：</b>${escapeHtml(profile.birthday || '未填写')}</div>`;
+                html += `<div><b>星座：</b>${escapeHtml(profile.constellation || '未填写')}</div>`;
+                html += `<div><b>故乡：</b>${escapeHtml(profile.hometown || '未填写')}</div>`;
+            } else {
+                // 他人视角：public_* 八字段隐私标志 + 管理员特权旁路 + "(管理员特权可见)"标注
+                if ((isAdminViewer || profile.public_email) && profile.email) {
+                    const isBypassed = !profile.public_email && isAdminViewer;
+                    html += `<div><b>绑定邮箱：</b>${escapeHtml(profile.email)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+                }
+
+                if ((isAdminViewer || profile.public_real_name) && profile.real_name) {
+                    const isBypassed = !profile.public_real_name && isAdminViewer;
+                    html += `<div><b>真实姓名：</b>${escapeHtml(profile.real_name)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+                }
+
+                if ((isAdminViewer || profile.public_phone) && profile.phone) {
+                    const isBypassed = !profile.public_phone && isAdminViewer;
+                    html += `<div><b>手机号：</b>${escapeHtml(profile.phone)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+                }
+
+                if ((isAdminViewer || profile.public_gender !== false) && profile.gender) {
+                    const isBypassed = profile.public_gender === false && isAdminViewer;
+                    html += `<div><b>性别：</b>${escapeHtml(profile.gender)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+                }
+
+                if ((isAdminViewer || profile.public_age !== false) && profile.age) {
+                    const isBypassed = profile.public_age === false && isAdminViewer;
+                    html += `<div><b>年龄：</b>${escapeHtml(profile.age)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+                }
+
+                if ((isAdminViewer || profile.public_birthday !== false) && profile.birthday) {
+                    const isBypassed = profile.public_birthday === false && isAdminViewer;
+                    html += `<div><b>生日：</b>${escapeHtml(profile.birthday)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+                }
+
+                if ((isAdminViewer || profile.public_constellation !== false) && profile.constellation) {
+                    const isBypassed = profile.public_constellation === false && isAdminViewer;
+                    html += `<div><b>星座：</b>${escapeHtml(profile.constellation)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+                }
+
+                if ((isAdminViewer || profile.public_hometown !== false) && profile.hometown) {
+                    const isBypassed = profile.public_hometown === false && isAdminViewer;
+                    html += `<div><b>故乡：</b>${escapeHtml(profile.hometown)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
+                }
+            }
+
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        // 话题足迹查询（指定偏移页）
+        function fetchTopicsPage(offset) {
+            return db.from('topics').select('id, title, category_id, created_at')
+                .eq('user_id', targetUserId)
+                .order('created_at', { ascending: false })
+                .range(offset, offset + PAGE_SIZE - 1);
+        }
+
+        // 评论足迹查询（指定偏移页）
+        function fetchCommentsPage(offset) {
+            return db.from('comments').select('*')
+                .eq('user_id', targetUserId)
+                .order('created_at', { ascending: false })
+                .range(offset, offset + PAGE_SIZE - 1);
+        }
+
+        // 懒加载板块名映射（categories 小表，仅拉取一次）
+        async function ensureCategoriesMap() {
+            if (Object.keys(categoriesMap).length > 0) return;
+            const { data: cats } = await db.from('categories').select('id, name');
+            if (cats) {
+                cats.forEach(c => { categoriesMap[c.id] = c.name; });
+            }
+        }
+
+        // 按 topic_id 批量计数映射（likes/comments，模式对齐 index.js loadTopics）
+        async function buildCountMap(tableName, topicIds) {
+            const map = {};
+            if (!topicIds || topicIds.length === 0) return map;
+            const { data: rows } = await db.from(tableName).select('topic_id').in('topic_id', topicIds);
+            if (rows) {
+                rows.forEach(r => { map[r.topic_id] = (map[r.topic_id] || 0) + 1; });
+            }
+            return map;
+        }
+
+        // 话题足迹渲染：标题/板块名/时间/点赞评论计数（limit 10 + 加载更多 + 空状态）
+        async function renderTopicsFootprint(topics, append) {
+            const container = document.getElementById('topics-footprint');
+            const loadMoreBtn = document.getElementById('load-more-topics');
+            if (!append) container.innerHTML = '';
+            if (!topics || topics.length === 0) {
+                if (!append) container.innerHTML = '<p style="font-size:13px; color:var(--meta-color); margin:0;">暂无话题</p>';
+                loadMoreBtn.classList.add('hidden');
+                return;
+            }
+
+            await ensureCategoriesMap();
+            const topicIds = topics.map(t => t.id);
+            const likeCountMap = await buildCountMap('likes', topicIds);
+            const commentCountMap = await buildCountMap('comments', topicIds);
+
+            topics.forEach(topic => {
+                const item = document.createElement('div');
+                item.className = 'footprint-item';
+                const catName = categoriesMap[topic.category_id] || '未知板块';
+                item.innerHTML = `
+                    <div class="flex" style="align-items: flex-start;">
+                        <span class="clickable-title" style="font-weight: 600;">${escapeHtml(topic.title)}</span>
+                        <span style="font-size: 11px; color: var(--meta-color); flex-shrink: 0; margin-left: 8px;">${new Date(topic.created_at).toLocaleString()}</span>
+                    </div>
+                    <div style="font-size: 11px; color: var(--meta-color); margin-top: 2px;">
+                        ${escapeHtml(catName)} &nbsp;|&nbsp; 👍 ${likeCountMap[topic.id] || 0} &nbsp; 💬 ${commentCountMap[topic.id] || 0}
+                    </div>
+                `;
+                // 点击话题标题深链定位该话题（复用论坛页话题深链机制）
+                item.querySelector('.clickable-title').onclick = () => {
+                    window.location.href = 'index.html?topic=' + encodeURIComponent(topic.id);
+                };
+                container.appendChild(item);
+            });
+
+            // 数据不足一页则隐藏"加载更多"
+            if (topics.length < PAGE_SIZE) {
+                loadMoreBtn.classList.add('hidden');
+            } else {
+                loadMoreBtn.classList.remove('hidden');
+            }
+        }
+
+        // 评论足迹渲染：内容摘要/所属话题标题（点击深链）/时间（limit 10 + 加载更多 + 空状态）
+        async function renderCommentsFootprint(comments, append) {
+            const container = document.getElementById('comments-footprint');
+            const loadMoreBtn = document.getElementById('load-more-comments');
+            if (!append) container.innerHTML = '';
+            if (!comments || comments.length === 0) {
+                if (!append) container.innerHTML = '<p style="font-size:13px; color:var(--meta-color); margin:0;">暂无评论</p>';
+                loadMoreBtn.classList.add('hidden');
+                return;
+            }
+
+            // in topic_id 查 topics 标题（所属话题映射；原话题已删除则展示占位且不可点击）
+            const topicIds = Array.from(new Set(comments.map(c => c.topic_id)));
+            const titleMap = {};
+            if (topicIds.length > 0) {
+                const { data: relatedTopics } = await db.from('topics').select('id, title').in('id', topicIds);
+                if (relatedTopics) {
+                    relatedTopics.forEach(t => { titleMap[t.id] = t.title; });
+                }
+            }
+
+            comments.forEach(comment => {
+                const rawContent = comment.content || '';
+                const excerpt = rawContent.length > 60 ? rawContent.slice(0, 60) + '...' : rawContent;
+                const topicTitle = titleMap[comment.topic_id];
+                const item = document.createElement('div');
+                item.className = 'footprint-item';
+                item.innerHTML = `
+                    <div style="margin-bottom: 2px;">
+                        ${topicTitle
+                            ? `<span class="clickable-title">${escapeHtml(topicTitle)}</span>`
+                            : '<span style="color: var(--meta-color);">（原话题已删除）</span>'}
+                    </div>
+                    <div style="font-size: 12px;">${escapeHtml(excerpt)}</div>
+                    <div style="font-size: 11px; color: var(--meta-color); margin-top: 2px;">${new Date(comment.created_at).toLocaleString()}</div>
+                `;
+                if (topicTitle) {
+                    // 点击所属话题标题深链回该话题
+                    item.querySelector('.clickable-title').onclick = () => {
+                        window.location.href = 'index.html?topic=' + encodeURIComponent(comment.topic_id);
+                    };
+                }
+                container.appendChild(item);
+            });
+
+            if (comments.length < PAGE_SIZE) {
+                loadMoreBtn.classList.add('hidden');
+            } else {
+                loadMoreBtn.classList.remove('hidden');
+            }
+        }
+
+        // 加载更多话题足迹（偏移递增追加渲染）
+        window.loadMoreTopics = async function() {
+            topicOffset += PAGE_SIZE;
+            const { data: topics } = await fetchTopicsPage(topicOffset);
+            renderTopicsFootprint(topics || [], true);
+        };
+
+        // 加载更多评论足迹（偏移递增追加渲染）
+        window.loadMoreComments = async function() {
+            commentOffset += PAGE_SIZE;
+            const { data: comments } = await fetchCommentsPage(commentOffset);
+            renderCommentsFootprint(comments || [], true);
+        };
+
+        async function initProfilePage() {
+            // 鉴权门禁：未登录提示并引导至论坛登录页（与成员列表页同口径，plan R&D-D9）
+            const session = await requireLogin(db, 'index.html', '请先登录论坛！');
+            if (!session) return;
+            viewerSession = session;
+
+            // URL 参数解析目标成员 id，缺失直接进入"用户不存在"空状态
+            const params = new URLSearchParams(window.location.search);
+            targetUserId = params.get('id');
+            if (!targetUserId) {
+                showNotFound();
+                return;
+            }
+            const isSelf = targetUserId === session.user.id;
+
+            // 查看者档案（判定管理员特权旁路；自己视角直接复用目标资料，省一次查询）
+            let viewerProfilePromise = null;
+            if (!isSelf) {
+                viewerProfilePromise = db.from('profiles').select('id, is_admin').eq('id', session.user.id).maybeSingle();
+            }
+
+            // 四路并行加载（Promise.all，plan R&D-D6）：
+            // ① 资料 by id ② 签到计数 ③ 话题足迹 by user_id ④ 评论足迹 by user_id
+            const [profileRes, checkinRes, topicsRes, commentsRes] = await Promise.all([
+                db.from('profiles').select('*').eq('id', targetUserId).maybeSingle(),
+                db.from('checkins').select('id', { count: 'exact', head: true }).eq('user_id', targetUserId),
+                fetchTopicsPage(0),
+                fetchCommentsPage(0)
+            ]);
+
+            const profile = profileRes.data;
+            if (!profile) {
+                // 目标成员不存在或已注销 → "用户不存在"空状态
+                showNotFound();
+                return;
+            }
+
+            let isAdminViewer = false;
+            if (isSelf) {
+                isAdminViewer = !!profile.is_admin;
+            } else if (viewerProfilePromise) {
+                const { data: viewerProfile } = await viewerProfilePromise;
+                isAdminViewer = !!(viewerProfile && viewerProfile.is_admin);
+            }
+
+            renderPublicSection(profile, checkinRes.count || 0, isSelf);
+            renderDetailSection(profile, isSelf, isAdminViewer);
+            renderTopicsFootprint(topicsRes.data || [], false);
+            renderCommentsFootprint(commentsRes.data || [], false);
+            document.getElementById('profile-content').classList.remove('hidden');
+        }
+
+        // 页面加载完成后自动触发（网络异常等极端情况展示错误空状态，不白屏）
+        window.addEventListener('DOMContentLoaded', () => {
+            initProfilePage().catch(err => {
+                console.error('初始化个人主页异常:', err);
+                showErrorState();
+            });
+        });
+    </script>
+</body>
+</html>

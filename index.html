@@ -87,7 +87,15 @@ button:hover { opacity: 0.9; }
 .action-btn.liked { color: #e53e3e; }
 /* 收藏激活（金色星形） */
 .action-btn.favorited { color: #d69e2e; }
-/* 移动端屏幕（<=768px）：字体与间距缩小，PC端保持绝对不变 */ 
+/* 站内搜索结果样式（US2） */
+.search-member-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.search-member-item { display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; transition: background 0.2s; overflow: hidden; }
+.search-member-item:hover { background-color: var(--hover-bg); }
+.search-member-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+.search-topic-item { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: background 0.2s; }
+.search-topic-item:hover { background-color: var(--hover-bg); }
+.search-topic-item:last-child { margin-bottom: 0; }
+/* 移动端屏幕（<=768px）：字体与间距缩小，PC端保持绝对不变 */
 @media (max-width: 768px) {
     body { font-size: 12px; padding: 6px; } 
     h2 { font-size: 1.1rem; } 
@@ -117,25 +125,29 @@ button:hover { opacity: 0.9; }
         <p id="auth-msg" style="color: red; font-size: 13px; margin-top: 10px;"></p> 
     </div> 
 
-    <!-- 论坛主界面 --> 
-    <div id="forum-section" class="hidden"> 
-        <div class="card flex">             
-            <div style="display: flex; align-items: center; gap: 12px;">                 
-                <div>                     
-                    <h2 style="margin:0;">海高论坛</h2>                     
-                    <span id="user-profile-summary" style="font-size: 12px; color: var(--meta-color);">加载中...</span>                 
+    <!-- 论坛主界面 -->
+    <div id="forum-section" class="hidden">
+        <div class="card">
+            <div class="flex">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <div>
+                        <h2 style="margin:0;">海高论坛</h2>
+                        <span id="user-profile-summary" style="font-size: 12px; color: var(--meta-color);">加载中...</span>
+                    </div>
+                    <!-- 管理员专属切换按钮（默认隐藏，登录后由脚本控制显示） -->
+                    <button id="post-mode-toggle" class="hidden" onclick="window.togglePostMode()" data-mode="topic" style=" transform: translate(-55px, -14px); background: #718096; color: #fff; padding: 3px 4px; font-size: 6px; border: none; border-radius: 3px; cursor: pointer;">切换全局通知</button>
                 </div>
-                <!-- 管理员专属切换按钮（默认隐藏，登录后由脚本控制显示） -->
-                <button id="post-mode-toggle" class="hidden" onclick="window.togglePostMode()" data-mode="topic" style=" transform: translate(-55px, -14px); background: #718096; color: #fff; padding: 3px 4px; font-size: 6px; border: none; border-radius: 3px; cursor: pointer;">切换全局通知</button>
-            </div>             
-            <div style="display: flex; gap: 8px;">
-                <button onclick="window.location.href='bridge.html'" style="background:#4a5568;">互动空间</button>
-                <button onclick="window.openProfile()" style="background:#4a5568; position: relative;"> 
-                    个人中心 <span id="notification-badge" class="hidden" style="position:absolute; top:-5px; right:-5px; background:red; width:10px; height:10px; border-radius:50%;"></span>                 
-                </button>                 
-                <button onclick="window.toggleTheme()" style="background:none; border:1px solid var(--border-color); color:var(--text-color);">🌓 主题</button>                 
-                <button onclick="window.handleLogout()" style="background:#e53e3e;">退出</button>             
-            </div>         
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="window.location.href='bridge.html'" style="background:#4a5568;">互动空间</button>
+                    <button onclick="window.openProfile()" style="background:#4a5568; position: relative;">
+                        个人中心 <span id="notification-badge" class="hidden" style="position:absolute; top:-5px; right:-5px; background:red; width:10px; height:10px; border-radius:50%;"></span>
+                    </button>
+                    <button onclick="window.toggleTheme()" style="background:none; border:1px solid var(--border-color); color:var(--text-color);">🌓 主题</button>
+                    <button onclick="window.handleLogout()" style="background:#e53e3e;">退出</button>
+                </div>
+            </div>
+            <!-- 站内搜索框（US2）：输入即时检索话题与成员，清空恢复板块话题流；独立成行不挤压按钮区 -->
+            <input type="text" id="search-input" placeholder="搜索话题或成员..." style="margin-top: 12px; margin-bottom: 0;">
         </div>
         <div style="display: flex; gap: 20px;" class="main-layout"> 
             <!-- 左侧板块导航 --> 
@@ -254,20 +266,11 @@ button:hover { opacity: 0.9; }
         <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 15px 0;"> 
         <h4 style="margin: 0 0 10px 0;">🔔 我的消息通知</h4> 
         <div id="notifications-list" style="max-height: 200px; overflow-y: auto;">加载中...</div> 
-        <div style="margin-top: 20px; text-align: right;"> 
-            <button onclick="window.closeProfile()" style="background-color: #718096; padding: 8px 20px;">返回论坛</button> 
-        </div> 
-    </div> 
+        <div style="margin-top: 20px; text-align: right;">
+            <button onclick="window.closeProfile()" style="background-color: #718096; padding: 8px 20px;">返回论坛</button>
+        </div>
+    </div>
 
-    <!-- 查看他人公开资料弹窗 --> 
-    <div id="user-modal" class="card hidden" style="max-width: 450px; margin: 100px auto; position: fixed; top: 15%; left: 50%; transform: translateX(-50%); z-index: 1000; box-shadow: 0 10px 25px rgba(0,0,0,0.3);"> 
-        <h3 id="modal-title" style="margin-top:0;">用户资料</h3> 
-        <div id="modal-user-content">加载中...</div> 
-        <div style="margin-top: 15px; text-align: right;"> 
-            <button onclick="window.closeUserModal()" style="background:#718096; padding: 6px 14px;">关闭</button> 
-        </div> 
-    </div> 
-</div> 
-
+</div>
 </body>
 </html>

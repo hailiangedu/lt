@@ -216,6 +216,11 @@
                                 </span>
                             </div>
                         `;
+                        // 点击成员卡片进入其个人主页（US1 入口）
+                        card.style.cursor = 'pointer';
+                        card.onclick = () => {
+                            window.location.href = 'profile.html?id=' + encodeURIComponent(user.id);
+                        };
                         container.appendChild(card);
                     });
                 };

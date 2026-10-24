@@ -101,6 +101,13 @@ let currentAuthUser = null;
 let currentTopicsMap = {};
 // 当前页相关用户档案映射：replyToUser 仅凭评论者 user_id 回查昵称
 let currentProfileMap = {};
+// 板块 DOM/名称映射：供话题深链激活板块样式、搜索结果展示板块名
+let categoryDomMap = {};
+let categoryNameMap = {};
+// 板块加载完成信号：供冷启动话题深链等待默认话题流就绪，避免并发渲染相互覆盖
+let categoriesLoadedResolve = null;
+const categoriesLoadedPromise = new Promise(resolve => { categoriesLoadedResolve = resolve; });
+let initialTopicsLoadPromise = null;
 
 db.auth.getSession().then(({ data: { session } }) => {
     if (session) initUserSession(session.user);
@@ -183,6 +190,10 @@ async function initUserSession(user) {
             el.classList.add('hidden');
         }
     });
+
+    // 消费 URL 参数（topic/comment 话题深链 + edit=1 自动打开个人中心编辑面板）：
+    // 置于档案填充完成之后，保证 openProfile/深链拿到真实资料，冷启动"先显示后填充"时序不被破坏
+    consumeUrlParams();
 }
 
 async function checkUnreadNotifications(userId) {
@@ -242,12 +253,28 @@ async function loadNotifications(userId) {
         const div = document.createElement('div');
         div.className = 'card';
         div.style.cssText = `padding: 10px; margin-bottom: 8px; font-size: 13px; ${notif.is_read ? '' : 'border-left: 3px solid var(--primary-color);'}`;
+        // 解析提及通知尾部的跳转定位标记 [[t:<topicId>,c:<commentId>]]
+        // （与 createComment 提及通知组装格式严格互逆）：剥离后展示干净文本，含标记卡片可点击跳转
+        const markerMatch = typeof notif.content === 'string'
+            ? notif.content.match(/\[\[t:([^,\]]+),c:([^\]]+)\]\]\s*$/)
+            : null;
+        let displayContent = notif.content;
+        if (markerMatch) {
+            displayContent = notif.content.slice(0, markerMatch.index).trim();
+            const deepTopicId = markerMatch[1];
+            const deepCommentId = markerMatch[2];
+            div.style.cursor = 'pointer';
+            div.title = '点击跳转到相关话题';
+            div.onclick = () => {
+                window.location.href = 'index.html?topic=' + encodeURIComponent(deepTopicId) + '&comment=' + encodeURIComponent(deepCommentId);
+            };
+        }
         div.innerHTML = `
             <div class="flex" style="margin-bottom:4px;">
                 <b>${escapeHtml(notif.title)}</b>
                 <span style="font-size:11px; color:var(--meta-color);">${new Date(notif.created_at).toLocaleString()}</span>
             </div>
-            <p style="margin:0;">${escapeHtml(notif.content)}</p>
+            <p style="margin:0;">${escapeHtml(displayContent)}${markerMatch ? ' <span style="color:var(--primary-color); font-size:11px;">↗ 点击跳转</span>' : ''}</p>
         `;
         container.appendChild(div);
     });
@@ -456,25 +483,38 @@ async function loadCategories() {
     const { data, error } = await db.from('categories').select('*').order('id', { ascending: true });
     if (error || !data || data.length === 0) {
         container.innerHTML = '<p style="font-size:12px; color:var(--meta-color);">暂无板块</p>';
+        // 板块加载结束（含失败路径）：释放深链等待信号
+        categoriesLoadedResolve();
         return;
     }
     container.innerHTML = '';
+    categoryDomMap = {};
+    categoryNameMap = {};
     data.forEach((cat, index) => {
         const div = document.createElement('div');
         div.className = 'category-item' + (index === 0 ? ' active' : '');
         div.innerText = cat.name;
+        // 记录板块 DOM 与名称映射（供深链激活板块样式 / 搜索结果展示板块名）
+        categoryDomMap[cat.id] = div;
+        categoryNameMap[cat.id] = cat.name;
         div.onclick = () => {
             document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
             div.classList.add('active');
             currentCategoryId = cat.id;
+            // 点击板块即进入浏览态：清空搜索框，保持"输入框内容驱动"的状态一致性
+            const searchEl = document.getElementById('search-input');
+            if (searchEl && searchEl.value) searchEl.value = '';
             loadTopics(cat.id);
         };
         container.appendChild(div);
     });
     if (data.length > 0) {
         currentCategoryId = data[0].id;
-        loadTopics(data[0].id);
+        // 记录默认板块话题流 Promise，供冷启动话题深链等待其就绪后再接管
+        initialTopicsLoadPromise = loadTopics(data[0].id);
     }
+    // 板块加载结束：释放深链等待信号
+    categoriesLoadedResolve();
 }
 
 let currentPage = 1;
@@ -567,7 +607,9 @@ async function loadTopics(categoryId, page = 1) {
     
     for (const topic of topics) {
         const div = document.createElement('div');
-        div.className = 'card'; 
+        div.className = 'card';
+        // 话题卡片 DOM 锚点（话题深链滚动定位目标，纯属性添加）
+        div.id = 'topic-' + topic.id;
 
         // 图片渲染：统一使用共享修复后的历史图片地址（旧域名替换 / undefined 路径修复）
         const fixedImageUrl = fixImageUrl(topic.image_url);
@@ -612,7 +654,7 @@ async function loadTopics(categoryId, page = 1) {
                 commentActions += `<button onclick="window.deleteComment('${comment.id}')" style="background:transparent; color:#e53e3e; border:none; font-size:11px; cursor:pointer; padding:0 4px;">删除</button>`;
             }
             commentsHtml += `
-                <div style="font-size:12px; margin-top:3px; padding-bottom:2px; display:flex; justify-content:space-between; align-items:center;">
+                <div id="comment-${comment.id}" style="font-size:12px; margin-top:3px; padding-bottom:2px; display:flex; justify-content:space-between; align-items:center;">
                     <div>
                         <span class="clickable-name" onclick="window.viewUserProfile('${comment.user_id}')">${escapeHtml(commentAuthor)}</span><b>:</b> ${escapeHtml(comment.content)} ${timeHtml} ${replyAction}
                     </div>
@@ -693,9 +735,264 @@ function updatePaginationUI() {
     const prevBtn = document.getElementById('prev-page');
     const nextBtn = document.getElementById('next-page');
 
+    // 话题流渲染即恢复分页控件可见（搜索态的隐藏由 performSearch 负责；
+    // 非搜索场景该控件本就恒为可见，此行不改变任何既有行为）
+    const controls = document.getElementById('pagination-controls');
+    if (controls) controls.style.display = 'flex';
+
     if (pageInfo) pageInfo.innerText = `第 ${currentPage} / ${maxPage} 页`;
     if (prevBtn) prevBtn.disabled = currentPage <= 1;
     if (nextBtn) nextBtn.disabled = currentPage >= maxPage;
+}
+
+// ==================== 话题深链机制（US3/US2 枢纽，plan R&D-D4） ====================
+// 冷启动 URL 参数快照（同步捕获，仅消费一次）
+const initialUrlParams = new URLSearchParams(window.location.search);
+let urlParamsConsumed = false;
+
+// 消费 URL 参数（在 initUserSession 档案填充完成后调用，保证 openProfile/深链拿到真实资料，
+// 冷启动"先显示后填充"时序不被破坏）：
+// ① index.html?topic=<id>&comment=<id> 话题深链定位（comment 可选）
+// ② index.html?edit=1 自动打开现有个人中心编辑面板（个人主页"编辑资料"入口消费）
+async function consumeUrlParams() {
+    if (urlParamsConsumed) return;
+    urlParamsConsumed = true;
+
+    const topicParam = initialUrlParams.get('topic');
+    const commentParam = initialUrlParams.get('comment');
+    const editParam = initialUrlParams.get('edit');
+
+    // 清理已消费参数（保留 pwa_view 等其他参数），避免刷新时重复触发一次性入口
+    initialUrlParams.delete('topic');
+    initialUrlParams.delete('comment');
+    initialUrlParams.delete('edit');
+    const remainingQs = initialUrlParams.toString();
+    try {
+        history.replaceState(null, '', remainingQs ? 'index.html?' + remainingQs : 'index.html');
+    } catch (e) {
+        // 本地 file:// 等环境异常时忽略，不影响功能
+    }
+
+    if (topicParam) {
+        // 话题深链：先等默认板块话题流就绪再接管，避免并发渲染相互覆盖
+        await categoriesLoadedPromise;
+        if (initialTopicsLoadPromise) {
+            try { await initialTopicsLoadPromise; } catch (e) { /* 默认流失败不阻断深链 */ }
+        }
+        handleTopicDeepLink(topicParam, commentParam).catch(() => {
+            // 深链失败静默回落（保持当前板块列表，不白屏不报错）
+        });
+    } else if (editParam === '1') {
+        // 自动打开个人中心编辑面板（复用现有 openProfile）
+        window.openProfile();
+    }
+}
+
+// 话题深链：查目标话题（板块/时间）→ count 同板块 created_at 严格更新者算页码
+// （page = floor(offset/5)+1，pageSize=5 与现有分页一致）→ 激活对应板块 → loadTopics 渲染
+// → 滚动定位目标锚点（优先 #comment-<id>，否则 #topic-<id>）+ 短暂高亮；
+// 目标不存在/查询失败 → 静默回落默认板块列表；搜索结果点击复用同一机制（不整页刷新）
+async function handleTopicDeepLink(topicId, commentId) {
+    // 深链接管即进入板块浏览态：清空搜索框，保持"输入框内容驱动"的状态一致性
+    const searchEl = document.getElementById('search-input');
+    if (searchEl && searchEl.value) searchEl.value = '';
+
+    try {
+        // 查询目标话题（板块/创建时间），不存在或已删除则静默回落
+        const { data: targetTopic, error: topicErr } = await db.from('topics').select('category_id, created_at').eq('id', topicId).maybeSingle();
+        if (topicErr || !targetTopic || !targetTopic.category_id) {
+            if (currentCategoryId) loadTopics(currentCategoryId);
+            return;
+        }
+
+        // 页码计算：同板块内 created_at 严格更新（更晚）者排在其前面，按每页 5 条换算页码
+        const { count: newerCount } = await db.from('topics')
+            .select('id', { count: 'exact', head: true })
+            .eq('category_id', targetTopic.category_id)
+            .gt('created_at', targetTopic.created_at);
+        const page = Math.floor((newerCount || 0) / pageSize) + 1;
+
+        // 激活对应板块样式（与板块点击的激活逻辑一致）
+        document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
+        const activeItem = categoryDomMap[targetTopic.category_id];
+        if (activeItem) activeItem.classList.add('active');
+
+        // 渲染目标页话题（分页可见性由 updatePaginationUI 统一恢复）
+        await loadTopics(targetTopic.category_id, page);
+
+        // 渲染完成后滚动定位：优先评论锚点，其次话题锚点；短暂高亮提示定位目标（不遮挡内容）
+        const anchor = (commentId && document.getElementById('comment-' + commentId)) || document.getElementById('topic-' + topicId);
+        if (anchor) {
+            anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            anchor.style.transition = 'box-shadow 0.3s';
+            anchor.style.boxShadow = '0 0 0 3px var(--primary-color)';
+            setTimeout(() => {
+                anchor.style.boxShadow = '';
+            }, 2000);
+        }
+    } catch (e) {
+        // 任何异常静默回落默认板块列表（不白屏不报错）
+        if (currentCategoryId) loadTopics(currentCategoryId);
+    }
+}
+
+// ==================== 站内搜索模块（US2，plan R&D-D5） ====================
+// 搜索态与板块浏览态互斥，由搜索框内容驱动；350ms 防抖（setTimeout 竞态清除，一次停顿至多一次请求）
+let searchTimer = null;
+
+// LIKE 通配符转义：% _ \ 前加反斜杠，保证关键词按字面量安全匹配（不引发查询异常与注入）
+function escapeLikePattern(keyword) {
+    return keyword.replace(/[\\%_]/g, '\\$&');
+}
+
+// 头像显示白名单：仅采用以 data:image/ 或 http 开头的取值，空值与脏数据回退 icon.png（同 bridge.html 口径）
+function searchAvatarSrc(avatarUrl) {
+    const url = typeof avatarUrl === 'string' ? avatarUrl : '';
+    return (url.startsWith('data:image/') || url.startsWith('http')) ? url : 'icon.png';
+}
+
+// 执行搜索：话题两路 ilike 查询合并去重 + 成员昵称查询，结果渲染到 topics-container
+async function performSearch(rawKeyword) {
+    let keyword = (rawKeyword || '').trim();
+    if (!keyword) {
+        // 空关键词：恢复当前板块的正常话题列表与分页（分页可见性由 updatePaginationUI 统一恢复）
+        loadTopics(currentCategoryId);
+        return;
+    }
+    // 超长关键词截断，不发起无意义查询
+    if (keyword.length > 50) keyword = keyword.slice(0, 50);
+    const pattern = '%' + escapeLikePattern(keyword) + '%';
+
+    const container = document.getElementById('topics-container');
+    container.innerHTML = '<p style="font-size:13px; color:var(--meta-color);">搜索中...</p>';
+    // 搜索态隐藏分页控件（清空搜索框后随话题流渲染恢复）
+    document.getElementById('pagination-controls').style.display = 'none';
+
+    // 话题两路独立查询（标题/内容各 limit 20）+ 成员昵称查询（limit 20）
+    // 不用 .or('title.ilike...,content.ilike...')：PostgREST or 表达式中关键词含逗号会破坏解析
+    const [titleRes, contentRes, memberRes] = await Promise.all([
+        db.from('topics').select('*').ilike('title', pattern).order('created_at', { ascending: false }).limit(20),
+        db.from('topics').select('*').ilike('content', pattern).order('created_at', { ascending: false }).limit(20),
+        db.from('profiles').select('id, nickname, grade, avatar_url, is_admin').ilike('nickname', pattern).limit(20)
+    ]);
+
+    // 话题按 id 合并去重（标题命中在前，保持时间倒序）
+    const mergedMap = {};
+    const mergedTopics = [];
+    if (titleRes.data) {
+        titleRes.data.forEach(t => {
+            if (!mergedMap[t.id]) { mergedMap[t.id] = true; mergedTopics.push(t); }
+        });
+    }
+    if (contentRes.data) {
+        contentRes.data.forEach(t => {
+            if (!mergedMap[t.id]) { mergedMap[t.id] = true; mergedTopics.push(t); }
+        });
+    }
+    const members = memberRes.data || [];
+
+    container.innerHTML = '';
+    if (mergedTopics.length === 0 && members.length === 0) {
+        container.innerHTML = '<div class="card"><p style="font-size:13px; color:var(--meta-color); margin:0;">未找到相关内容</p></div>';
+        return;
+    }
+
+    // 成员结果区：头像白名单/昵称/年级/管理员徽章，点击进入其个人主页
+    if (members.length > 0) {
+        const memberCard = document.createElement('div');
+        memberCard.className = 'card';
+        memberCard.innerHTML = `<h4 style="margin:0 0 8px 0;">相关成员（${members.length}）</h4>`;
+        const memberGrid = document.createElement('div');
+        memberGrid.className = 'search-member-grid';
+        members.forEach(m => {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'search-member-item';
+            itemEl.innerHTML = `
+                <img src="${escapeHtml(searchAvatarSrc(m.avatar_url))}" alt="头像" class="search-member-avatar">
+                <div style="overflow:hidden;">
+                    <div style="display:flex; align-items:center; gap:5px;">
+                        <b style="font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(m.nickname || '未命名用户')}</b>
+                        ${m.is_admin ? '<span class="badge-admin">管理员</span>' : ''}
+                    </div>
+                    <div style="font-size:11px; color:var(--meta-color);">年级：${escapeHtml(m.grade || '未填')}</div>
+                </div>
+            `;
+            // 点击成员结果进入其个人主页（事件绑定，不内联拼接用户数据）
+            itemEl.onclick = () => {
+                window.location.href = 'profile.html?id=' + encodeURIComponent(m.id);
+            };
+            memberGrid.appendChild(itemEl);
+        });
+        memberCard.appendChild(memberGrid);
+        container.appendChild(memberCard);
+    }
+
+    // 话题结果区：标题/内容摘要/作者/板块名/时间/点赞评论计数，点击内联调用话题深链定位
+    if (mergedTopics.length > 0) {
+        // 作者昵称映射（仅按需查询命中话题涉及的用户）
+        const userIdSet = new Set();
+        mergedTopics.forEach(t => userIdSet.add(t.user_id));
+        const authorMap = {};
+        const userIds = Array.from(userIdSet);
+        if (userIds.length > 0) {
+            const { data: profilesData } = await db.from('profiles').select('id, nickname, is_admin').in('id', userIds);
+            if (profilesData) {
+                profilesData.forEach(p => { authorMap[p.id] = p; });
+            }
+        }
+        // 点赞/评论计数映射（模式对齐 loadTopics）
+        const topicIds = mergedTopics.map(t => t.id);
+        const likeCountMap = {};
+        const commentCountMap = {};
+        if (topicIds.length > 0) {
+            const { data: likeRows } = await db.from('likes').select('topic_id').in('topic_id', topicIds);
+            if (likeRows) {
+                likeRows.forEach(l => { likeCountMap[l.topic_id] = (likeCountMap[l.topic_id] || 0) + 1; });
+            }
+            const { data: commentRows } = await db.from('comments').select('topic_id').in('topic_id', topicIds);
+            if (commentRows) {
+                commentRows.forEach(c => { commentCountMap[c.topic_id] = (commentCountMap[c.topic_id] || 0) + 1; });
+            }
+        }
+
+        const topicCard = document.createElement('div');
+        topicCard.className = 'card';
+        topicCard.innerHTML = `<h4 style="margin:0 0 8px 0;">相关话题（${mergedTopics.length}）</h4>`;
+        mergedTopics.forEach(topic => {
+            const author = authorMap[topic.user_id];
+            const authorName = author ? author.nickname : (topic.user_name || '匿名用户');
+            const catName = categoryNameMap[topic.category_id] || '未知板块';
+            const rawContent = topic.content || '';
+            const excerpt = rawContent.length > 80 ? rawContent.slice(0, 80) + '...' : rawContent;
+            const itemEl = document.createElement('div');
+            itemEl.className = 'search-topic-item';
+            itemEl.innerHTML = `
+                <div style="font-weight:600; font-size:14px;">${escapeHtml(topic.title)}</div>
+                <div style="font-size:12px; color:var(--meta-color); margin-top:2px;">${escapeHtml(excerpt)}</div>
+                <div style="font-size:11px; color:var(--meta-color); margin-top:4px;">
+                    ${escapeHtml(authorName)}${author && author.is_admin ? ' <span class="badge-admin">管理员</span>' : ''} &nbsp;|&nbsp; ${escapeHtml(catName)} &nbsp;|&nbsp; ${new Date(topic.created_at).toLocaleString()} &nbsp;|&nbsp; 👍 ${likeCountMap[topic.id] || 0} &nbsp; 💬 ${commentCountMap[topic.id] || 0}
+                </div>
+            `;
+            // 点击搜索结果话题：内联调用话题深链定位（不整页刷新）
+            itemEl.onclick = () => {
+                handleTopicDeepLink(topic.id);
+            };
+            topicCard.appendChild(itemEl);
+        });
+        container.appendChild(topicCard);
+    }
+}
+
+// 搜索框输入监听：350ms 防抖（setTimeout 竞态清除，连续快速输入仅发起一次搜索请求）
+const searchInputEl = document.getElementById('search-input');
+if (searchInputEl) {
+    searchInputEl.addEventListener('input', () => {
+        if (searchTimer) clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            searchTimer = null;
+            performSearch(searchInputEl.value);
+        }, 350);
+    });
 }
 
 // 点赞处理函数
@@ -963,21 +1260,70 @@ window.createComment = async function(topicId) {
     const input = document.getElementById(`comment-input-${topicId}`);
     const content = input.value.trim();
     if (!content) return alert('评论内容不能为空！');
-    
-    const { error } = await db.from('comments').insert({
+
+    // insert 增 .select('id').single() 取回评论 id（供 @提及通知定位评论锚点；插入字段与对外行为不变）
+    const { data: insertedComment, error } = await db.from('comments').insert({
         topic_id: topicId,
         user_id: currentAuthUser.id,
         user_name: currentUserProfile.nickname || '匿名用户',
         content
-    });
-    
+    }).select('id').single();
+
     if (error) {
         alert('评论失败: ' + error.message);
     } else {
         input.value = '';
         loadTopics(currentCategoryId);
+        // 评论成功后异步投递 @提及通知（不阻塞评论发布路径，失败静默降级）
+        // 回复按钮预填的 `@昵称 ` 与手打 @ 自然走同一解析路径
+        if (insertedComment && insertedComment.id) {
+            sendMentionNotifications(topicId, insertedComment.id, content).catch(() => {});
+        }
     }
 };
+
+// @提及解析与通知投递（US3，plan R&D-D2/D3）：正则提取正文 @token → 去重 → 昵称精确匹配成员
+// （同名全收，宁多勿漏）→ 排除评论者本人 → 组装通知数组（content 尾部携带跳转定位标记）→ 批量插入；
+// 全程静默降级，评论发布永不受提及功能受阻
+async function sendMentionNotifications(topicId, commentId, content) {
+    // 正则提取 @提及 token（@ 后跟非空白非@的连续字符），同人去重
+    const tokens = [];
+    const seenTokens = new Set();
+    const mentionRegex = /@([^\s@]+)/g;
+    let match;
+    while ((match = mentionRegex.exec(content)) !== null) {
+        const token = match[1];
+        if (token && !seenTokens.has(token)) {
+            seenTokens.add(token);
+            tokens.push(token);
+        }
+    }
+    if (tokens.length === 0) return;
+
+    // 昵称精确匹配（in 查询，同名成员全部命中）
+    const { data: mentionedProfiles } = await db.from('profiles').select('id, nickname').in('nickname', tokens);
+    if (!mentionedProfiles || mentionedProfiles.length === 0) return;
+
+    // 排除评论者本人（自我提及忽略）
+    const recipients = mentionedProfiles.filter(p => p.id !== currentAuthUser.id);
+    if (recipients.length === 0) return;
+
+    // 查询所属话题标题（用于通知文案；话题已删除则使用占位文案）
+    const { data: topicRow } = await db.from('topics').select('title').eq('id', topicId).maybeSingle();
+    const topicTitle = (topicRow && topicRow.title) ? topicRow.title : '已删除的话题';
+
+    const commenterName = currentUserProfile.nickname || '匿名用户';
+    // 通知 content 尾部携带跳转定位标记 [[t:<topicId>,c:<commentId>]]，
+    // 与 loadNotifications 渲染时的标记解析逻辑严格互逆
+    const notificationsData = recipients.map(p => ({
+        user_id: p.id,
+        title: '💬 有人提到了你',
+        content: `${commenterName} 在《${topicTitle}》中提到了你 [[t:${topicId},c:${commentId}]]`,
+        is_read: false
+    }));
+
+    await db.from('notifications').insert(notificationsData);
+}
 
 window.deleteComment = async function(commentId) {
     if (!confirm('确定要删除这条评论吗？')) return;
@@ -1044,69 +1390,8 @@ window.deleteTopic = async function(id) {
     }
 };
 
-window.viewUserProfile = async function(userId) {
-    const modalContent = document.getElementById('modal-user-content');
-    const modalTitle = document.getElementById('modal-title');
-    modalContent.innerHTML = '加载中...';
-    document.getElementById('user-modal').classList.remove('hidden');
-
-    const { data: profile, error } = await db.from('profiles').select('*').eq('id', userId).single();
-    if (error || !profile) {
-        modalContent.innerHTML = '<p style="color:red; font-size:13px;">无法获取该用户资料或用户已注销。</p>';
-        return;
-    }
-
-    modalTitle.innerText = `${profile.nickname || '用户'} 的个人资料`;
-    const isAdminViewer = currentUserProfile && currentUserProfile.is_admin;
-    
-    let html = `<div style="font-size:13px; display:flex; flex-direction:column; gap:6px;">`;
-    html += `<div><b>身份：</b>${profile.is_admin ? '🛡️ 管理员 (Admin)' : '普通成员'}</div>`;
-    // 年级强制向外展示
-    html += `<div><b>年级：</b> ${escapeHtml(profile.grade || '未填写')}</div>`;
-    if ((isAdminViewer || profile.public_email) && profile.email) {
-        const isBypassed = !profile.public_email && isAdminViewer;
-        html += `<div><b>绑定邮箱：</b>${escapeHtml(profile.email)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
-    }
-
-    if ((isAdminViewer || profile.public_real_name) && profile.real_name) {
-        const isBypassed = !profile.public_real_name && isAdminViewer;
-        html += `<div><b>真实姓名：</b>${escapeHtml(profile.real_name)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
-    }
-
-    if ((isAdminViewer || profile.public_phone) && profile.phone) {
-        const isBypassed = !profile.public_phone && isAdminViewer;
-        html += `<div><b>手机号：</b>${escapeHtml(profile.phone)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
-    }
-
-    if ((isAdminViewer || profile.public_gender !== false) && profile.gender) {
-        const isBypassed = profile.public_gender === false && isAdminViewer;
-        html += `<div><b>性别：</b>${escapeHtml(profile.gender)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
-    }
-
-    if ((isAdminViewer || profile.public_age !== false) && profile.age) {
-        const isBypassed = profile.public_age === false && isAdminViewer;
-        html += `<div><b>年龄：</b>${escapeHtml(profile.age)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
-    }
-
-    if ((isAdminViewer || profile.public_birthday !== false) && profile.birthday) {
-        const isBypassed = profile.public_birthday === false && isAdminViewer;
-        html += `<div><b>生日：</b>${escapeHtml(profile.birthday)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
-    }
-
-    if ((isAdminViewer || profile.public_constellation !== false) && profile.constellation) {
-        const isBypassed = profile.public_constellation === false && isAdminViewer;
-        html += `<div><b>星座：</b>${escapeHtml(profile.constellation)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
-    }
-
-    if ((isAdminViewer || profile.public_hometown !== false) && profile.hometown) {
-        const isBypassed = profile.public_hometown === false && isAdminViewer;
-        html += `<div><b>故乡：</b>${escapeHtml(profile.hometown)} ${isBypassed ? '<span style="color:#e53e3e; font-size:11px;">(管理员特权可见)</span>' : ''}</div>`;
-    }
-    
-    html += `</div>`;
-    modalContent.innerHTML = html;
-};
-
-window.closeUserModal = function() {
-    document.getElementById('user-modal').classList.add('hidden');
+// 查看用户资料：跳转该成员的个人主页 profile.html（旧资料弹窗已由个人主页取代）
+// 保留函数名与签名，话题作者/评论者等全部既有 onclick 绑定零改动；隐私展示口径已迁移至 profile.html
+window.viewUserProfile = function(userId) {
+    window.location.href = 'profile.html?id=' + encodeURIComponent(userId);
 };
