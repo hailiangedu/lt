@@ -1,4 +1,15 @@
-const CACHE_NAME = 'hailiang-forum-v7';
+// ==================== 部署纪律（长期有效，每次部署前核对） ====================
+// ① 变更任一本地 JS（main.js/config.js/common.js/index.js 等）→ 必须同步 bump 引用它的
+//    页面里的 `?v=N` 与下方 assetsToCache 清单同名条目（两处成对升级；遗漏任一侧的
+//    失败模式均为"更新不生效"而非"新旧错配"，下次补齐即恢复）
+// ② 变更 HTML 结构且影响 JS 依赖的 DOM → 同上成对 bump 该页面的 `?v=`
+// ③ 变更快照渲染结构（index.js 中 categoriesHtml/topicsHtml 的生成结构）→
+//    同步 bump index.js 快照模块的 SNAPSHOT structVer（结构不符即弃快照，回落正常加载）
+// ④ 本批部署：sw.js 与全部页面/JS/图标 PNG/manifest.json 必须同步上传；
+//    漏传任一预缓存文件将导致 SW install 预缓存失败、整批更新不生效
+// ============================================================================
+
+const CACHE_NAME = 'hailiang-forum-v8';
 const assetsToCache = [
     './index.html',
     './bridge.html',
@@ -7,13 +18,17 @@ const assetsToCache = [
     './space.html',
     './checkin.html',
     './profile.html',
-    './config.js',
-    './common.js',
-    './main.js',
-    './index.js',
+    './config.js?v=1',
+    './common.js?v=1',
+    './main.js?v=1',
+    './index.js?v=1',
     './beijing.png',
     './image.png',
     './icon.png',
+    './icon-192.png',
+    './icon-512.png',
+    './icon-192-maskable.png',
+    './icon-512-maskable.png',
     'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
 ];
 
@@ -43,7 +58,7 @@ self.addEventListener('activate', event => {
     );
 });
 
-// 3. 请求分层策略：同源静态资源 + jsdelivr CDN 白名单（Supabase SDK）stale-while-revalidate（缓存即时响应 + 后台静默更新），其余请求网络优先
+// 3. 请求分层策略：同源静态资源 + jsdelivr CDN 白名单（Supabase SDK）+ 同源 HTML 导航请求，三者均 stale-while-revalidate（缓存即时响应 + 后台静默更新），其余请求网络优先
 self.addEventListener('fetch', event => {
     // 仅处理 http/https 请求
     if (!event.request.url.startsWith('http')) return;
@@ -102,7 +117,56 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // 其余请求（HTML 导航、跨源 CDN 等）：网络优先 + 缓存兜底（原有逻辑保持不变）
+    // 同源 HTML 导航请求（App Shell 秒开）：stale-while-revalidate
+    // 响应逻辑与上方静态 SWR 一致（命中即时返回 + 后台静默更新，下次访问生效），
+    // 但缓存匹配使用 ignoreSearch——深链 URL（index.html?topic=..&comment=..）也能命中
+    // 预缓存的 index.html；后台 cache.put 写原请求 URL（带参条目，无害）；
+    // 缓存未命中走网络写缓存，失败回缓存（同样 ignoreSearch）再失败 404
+    if (event.request.method === 'GET' && event.request.mode === 'navigate' && requestUrl.origin === self.location.origin) {
+        event.respondWith(
+            caches.match(event.request, { ignoreSearch: true }).then(cachedResponse => {
+                if (cachedResponse) {
+                    // 后台静默更新缓存：成功则下次访问生效，失败静默忽略，不影响本次已返回的缓存响应
+                    fetch(event.request)
+                        .then(networkResponse => {
+                            if (networkResponse && networkResponse.status === 200) {
+                                const responseClone = networkResponse.clone();
+                                caches.open(CACHE_NAME).then(cache => {
+                                    cache.put(event.request, responseClone);
+                                });
+                            }
+                        })
+                        .catch(() => {});
+                    return cachedResponse;
+                }
+                // 缓存未命中：走网络，成功则写入缓存并返回，失败回缓存（ignoreSearch 深链容错）再失败 404
+                return fetch(event.request)
+                    .then(networkResponse => {
+                        if (networkResponse && networkResponse.status === 200) {
+                            const responseClone = networkResponse.clone();
+                            caches.open(CACHE_NAME).then(cache => {
+                                cache.put(event.request, responseClone);
+                            });
+                        }
+                        return networkResponse;
+                    })
+                    .catch(() => {
+                        return caches.match(event.request, { ignoreSearch: true }).then(fallbackResponse => {
+                            if (fallbackResponse) {
+                                return fallbackResponse;
+                            }
+                            return new Response('Network error or resource not found', {
+                                status: 404,
+                                statusText: 'Not Found'
+                            });
+                        });
+                    });
+            })
+        );
+        return;
+    }
+
+    // 其余请求（跨源导航等）：网络优先 + 缓存兜底（原有逻辑保持不变）
     event.respondWith(
         fetch(event.request)
             .then(networkResponse => {

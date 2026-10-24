@@ -7,15 +7,17 @@
 <link rel="icon" type="image/png" href="./image.png">
 <!-- PWA 应用清单 -->
 <link rel="manifest" href="manifest.json?v=3">
+<!-- iOS 添加到主屏高清图标 -->
+<link rel="apple-touch-icon" href="icon-192.png">
 <!-- 引入 Supabase SDK --> 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script> 
 <!-- 全局配置与共享工具层 -->
-<script src="config.js"></script>
-<script src="common.js"></script>
+<script src="config.js?v=1"></script>
+<script src="common.js?v=1"></script>
 <!-- 引入独立的 PWA 引导脚本 -->
-<script src="main.js" defer></script>
+<script src="main.js?v=1" defer></script>
 <!-- 引入主论坛页业务脚本（原内联脚本外置，defer 保证在 main.js 之后执行） -->
-<script src="index.js" defer></script>
+<script src="index.js?v=1" defer></script>
 <style> 
 :root {
     --bg-color: #f4f6f8; 

@@ -148,8 +148,32 @@ async function initUserSession(user) {
         window.syncUserIdToSW(user.id);
     }
 
+    // === 内容快照恢复（US2，plan R&D-D3/D4；深链优先：URL 含 topic 参数则跳过快照，由 consumeUrlParams 深链流程接管）===
+    // 恢复成功：showForum 跳过默认无参 loadCategories（三路径互斥、无双调用），快照 DOM 同步呈现，
+    // 随后 loadCategories(快照板块, 快照页) 后台静默校正（不 await 不阻塞，校正渲染自然写入新快照=快照自愈）；
+    // 恢复失败/无快照/深链存在：现状路径完全不变（showForum 内无参 loadCategories 照旧）
+    const hasTopicDeepLink = new URLSearchParams(window.location.search).has('topic');
+    const restoredSnapshot = hasTopicDeepLink ? null : restoreSnapshot(user.id);
+
     // 论坛先显示：不再被 profiles 查询的网络往返阻塞，分类/列表加载（loadCategories）立即启动
-    showForum();
+    showForum(restoredSnapshot ? true : undefined);
+
+    if (restoredSnapshot) {
+        // 同步写入快照渲染产物（innerHTML 均为历史渲染结果，FR-009 渲染一致性天然满足）
+        document.getElementById('categories-list').innerHTML = restoredSnapshot.categoriesHtml;
+        document.getElementById('topics-container').innerHTML = restoredSnapshot.topicsHtml;
+        // 恢复全局浏览状态（编辑弹窗 topicsMap / 回复回查 profileMap 一并恢复，恢复后即可用）
+        currentCategoryId = restoredSnapshot.categoryId;
+        currentPage = restoredSnapshot.page || 1;
+        totalTopicsCount = restoredSnapshot.totalTopicsCount || 0;
+        currentTopicsMap = restoredSnapshot.topicsMap || {};
+        currentProfileMap = restoredSnapshot.profileMap || {};
+        updatePaginationUI();
+        scrollTo(0, restoredSnapshot.scrollY || 0);
+        // 后台校正：板块列表刷新 + 快照板块快照页话题流静默覆盖快照（不 await 不阻塞）
+        loadCategories(restoredSnapshot.categoryId, restoredSnapshot.page);
+    }
+
     // 未读红点检查与在线状态上报均为 fire-and-forget，提前执行
     checkUnreadNotifications(user.id);
     if (typeof window.initGlobalPresence === 'function') {
@@ -206,11 +230,15 @@ async function checkUnreadNotifications(userId) {
     }
 }
 
-function showForum() {
+// skipCategoryLoad（可选，仅快照恢复成功路径传 true）：跳过末尾默认无参 loadCategories，
+// 由快照恢复路径接管渲染（三路径互斥、无双调用）；既有无参调用点（closeProfile 返回论坛）行为不变
+function showForum(skipCategoryLoad) {
     document.getElementById('auth-section').classList.add('hidden');
     document.getElementById('profile-section').classList.add('hidden');
     document.getElementById('forum-section').classList.remove('hidden');
-    loadCategories();
+    if (skipCategoryLoad !== true) {
+        loadCategories();
+    }
 }
 
 window.openProfile = async function() {
@@ -451,6 +479,9 @@ window.handleRegister = async function() {
 };
 
 window.handleLogout = async function() {
+    // 隐私红线（FR-004）：登出动作触发即清空内容快照与滚动位置两 key，
+    // 下一个使用者不可见上一个用户浏览内容（清空失败静默，不阻断登出）
+    clearSnapshot();
     await db.auth.signOut();
     currentUserProfile = null;
     currentAuthUser = null;
@@ -478,7 +509,162 @@ window.toggleTheme = function() {
     }
 };
 
-async function loadCategories() {
+// ==================== 内容快照模块（US2，plan R&D-D3） ====================
+// 已登录用户论坛浏览态快照：localStorage 双 key——主体（渲染产物+分页+映射表）与滚动位置分离，
+// 滚动高频写不触发整块快照重写；登出清理、换号不恢复、损坏即弃（FR-004/FR-005 隐私与回落红线）
+const SNAPSHOT_KEYS = {
+    main: 'forum_content_snapshot_v1',
+    scroll: 'forum_snapshot_scroll_v1'
+};
+const SNAPSHOT_STRUCT_VER = 1;
+
+// 写主体快照：structVer 内嵌（渲染结构变更时 bump，恢复校验不符即弃）；配额/禁用异常静默
+function saveSnapshot(userId, categoryId, page, totalTopicsCount, categoriesHtml, topicsHtml, topicsMap, profileMap) {
+    try {
+        localStorage.setItem(SNAPSHOT_KEYS.main, JSON.stringify({
+            userId: userId,
+            structVer: SNAPSHOT_STRUCT_VER,
+            categoryId: categoryId,
+            page: page,
+            totalTopicsCount: totalTopicsCount,
+            categoriesHtml: categoriesHtml,
+            topicsHtml: topicsHtml,
+            topicsMap: topicsMap,
+            profileMap: profileMap,
+            savedAt: Date.now()
+        }));
+    } catch (e) {
+        // 超配额 / 隐私模式禁用等：写入失败静默（回落正常加载，不报错不阻塞）
+    }
+}
+
+// 写滚动位置（独立小 key 支撑高频写）
+function saveScroll(userId, scrollY) {
+    try {
+        localStorage.setItem(SNAPSHOT_KEYS.scroll, JSON.stringify({
+            userId: userId,
+            scrollY: scrollY
+        }));
+    } catch (e) {
+        // 同上：静默
+    }
+}
+
+// 清空两 key（登出隐私红线 + 换号/损坏清理共用）
+function clearSnapshot() {
+    try {
+        localStorage.removeItem(SNAPSHOT_KEYS.main);
+        localStorage.removeItem(SNAPSHOT_KEYS.scroll);
+    } catch (e) {
+        // 静默
+    }
+}
+
+// 恢复快照：读两 key → 解析 → 校验（归属用户匹配 + 结构版本 + 渲染产物非空）→ 合并返回（含 scrollY）；
+// 任一步失败返回 null 且不抛错；userId 不匹配（换号残留）时清掉两 key，防串号
+function restoreSnapshot(userId) {
+    let mainRaw = null;
+    let scrollRaw = null;
+    try {
+        mainRaw = localStorage.getItem(SNAPSHOT_KEYS.main);
+        scrollRaw = localStorage.getItem(SNAPSHOT_KEYS.scroll);
+    } catch (e) {
+        return null;
+    }
+    if (!mainRaw) return null;
+
+    let snapshot = null;
+    try {
+        snapshot = JSON.parse(mainRaw);
+    } catch (e) {
+        // 主体损坏即弃（清残留，回落正常加载）
+        clearSnapshot();
+        return null;
+    }
+    // 归属用户不符：清两 key（防换号残留），走正常加载
+    if (!snapshot || snapshot.userId !== userId) {
+        clearSnapshot();
+        return null;
+    }
+    // 结构校验：版本不符或渲染产物缺失即弃（未来渲染结构变更时 bump structVer 即在此拦截）
+    if (snapshot.structVer !== SNAPSHOT_STRUCT_VER ||
+        typeof snapshot.categoriesHtml !== 'string' || snapshot.categoriesHtml === '' ||
+        typeof snapshot.topicsHtml !== 'string' || snapshot.topicsHtml === '') {
+        clearSnapshot();
+        return null;
+    }
+
+    // 滚动位置合并（滚动 key 损坏/缺失/归属不符则回退 0，不阻断主体恢复）
+    let scrollY = 0;
+    if (scrollRaw) {
+        try {
+            const scrollData = JSON.parse(scrollRaw);
+            if (scrollData && scrollData.userId === userId && typeof scrollData.scrollY === 'number') {
+                scrollY = scrollData.scrollY;
+            }
+        } catch (e) {
+            // 滚动数据损坏：忽略，保持 0
+        }
+    }
+    snapshot.scrollY = scrollY;
+    return snapshot;
+}
+
+// 主体快照 categoriesHtml 字段合并更新：读现有主体快照→仅更新该字段→写回
+// （不覆盖 topicsHtml 等其余字段；快照不存在则跳过，主体由 loadTopics 渲染完成时全量写入）
+function updateSnapshotCategoriesHtml() {
+    try {
+        const raw = localStorage.getItem(SNAPSHOT_KEYS.main);
+        if (!raw) return;
+        const listEl = document.getElementById('categories-list');
+        const html = listEl ? listEl.innerHTML : '';
+        if (!html) return;
+        const snapshot = JSON.parse(raw);
+        if (!snapshot) return;
+        snapshot.categoriesHtml = html;
+        localStorage.setItem(SNAPSHOT_KEYS.main, JSON.stringify(snapshot));
+    } catch (e) {
+        // localStorage 禁用 / 快照损坏：静默跳过（快照自愈交给下次 loadTopics 全量写入）
+    }
+}
+
+// 当前浏览态写主体快照（loadTopics 渲染完成尾部调用）：categoriesHtml 取当前 DOM，与渲染结果天然一致；
+// 映射表/分页状态取全局内存值；写入在渲染完成之后，不阻塞渲染（FR-009：快照即渲染结果本身）
+function saveCurrentContentSnapshot(categoryId) {
+    if (!currentAuthUser) return;
+    const categoriesEl = document.getElementById('categories-list');
+    const topicsEl = document.getElementById('topics-container');
+    saveSnapshot(
+        currentAuthUser.id,
+        categoryId,
+        currentPage,
+        totalTopicsCount,
+        categoriesEl ? categoriesEl.innerHTML : '',
+        topicsEl ? topicsEl.innerHTML : '',
+        currentTopicsMap,
+        currentProfileMap
+    );
+}
+
+// 滚动位置持久化监听（仅注册一次）：scroll 500ms 防抖 + visibilitychange(hidden) 即时写
+// （PWA 被系统直接杀死前的最后写入时机）；用当前已登录用户 id
+let snapshotScrollTimer = null;
+window.addEventListener('scroll', () => {
+    if (snapshotScrollTimer) clearTimeout(snapshotScrollTimer);
+    snapshotScrollTimer = setTimeout(() => {
+        snapshotScrollTimer = null;
+        if (currentAuthUser) saveScroll(currentAuthUser.id, window.scrollY);
+    }, 500);
+});
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && currentAuthUser) {
+        saveScroll(currentAuthUser.id, window.scrollY);
+    }
+});
+
+// preselectCategoryId/preselectPage（可选，快照恢复后台校正场景传入）：板块列表 active 态与
+// 末尾自动加载落在该板块/该页；无参调用时缺省=首板块第 1 页，与既有默认行为逐行等价（现有无参调用点零改动）
+async function loadCategories(preselectCategoryId, preselectPage) {
     const container = document.getElementById('categories-list');
     const { data, error } = await db.from('categories').select('*').order('id', { ascending: true });
     if (error || !data || data.length === 0) {
@@ -487,12 +673,15 @@ async function loadCategories() {
         categoriesLoadedResolve();
         return;
     }
+    // 预选板块解析：传入 id 无效（已删除/不存在）时回落首板块，与快照"损坏即弃"口径一致
+    const hasValidPreselect = preselectCategoryId != null && data.some(cat => cat.id === preselectCategoryId);
+    const targetCategoryId = hasValidPreselect ? preselectCategoryId : data[0].id;
     container.innerHTML = '';
     categoryDomMap = {};
     categoryNameMap = {};
-    data.forEach((cat, index) => {
+    data.forEach(cat => {
         const div = document.createElement('div');
-        div.className = 'category-item' + (index === 0 ? ' active' : '');
+        div.className = 'category-item' + (cat.id === targetCategoryId ? ' active' : '');
         div.innerText = cat.name;
         // 记录板块 DOM 与名称映射（供深链激活板块样式 / 搜索结果展示板块名）
         categoryDomMap[cat.id] = div;
@@ -509,12 +698,14 @@ async function loadCategories() {
         container.appendChild(div);
     });
     if (data.length > 0) {
-        currentCategoryId = data[0].id;
+        currentCategoryId = targetCategoryId;
         // 记录默认板块话题流 Promise，供冷启动话题深链等待其就绪后再接管
-        initialTopicsLoadPromise = loadTopics(data[0].id);
+        initialTopicsLoadPromise = loadTopics(targetCategoryId, preselectPage);
     }
     // 板块加载结束：释放深链等待信号
     categoriesLoadedResolve();
+    // 渲染完成：更新主体快照 categoriesHtml 字段（读改写合并；快照不存在则跳过）
+    updateSnapshotCategoriesHtml();
 }
 
 let currentPage = 1;
@@ -547,6 +738,11 @@ async function loadTopics(categoryId, page = 1) {
         currentProfileMap = {};
         container.innerHTML = '<div class="card"><p style="font-size:13px; color:var(--meta-color); margin:0;">该板块下暂无话题，快来发表第一个话题吧！</p></div>';
         updatePaginationUI();
+        // 查询成功但板块为空亦属有效浏览态：同样写主体快照；查询失败（error）则跳过，
+        // 避免瞬时网络故障用"暂无话题"覆盖好的历史快照
+        if (!error) {
+            saveCurrentContentSnapshot(categoryId);
+        }
         return;
     }
 
@@ -717,6 +913,9 @@ async function loadTopics(categoryId, page = 1) {
 
     // 刷新分页按钮状态及页码显示
     updatePaginationUI();
+
+    // 渲染完成：写主体内容快照（非阻塞，失败静默；后台校正渲染同样走此路径，快照自愈）
+    saveCurrentContentSnapshot(categoryId);
 }
 
 // 翻页触发函数
