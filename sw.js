@@ -9,7 +9,7 @@
 //    漏传任一预缓存文件将导致 SW install 预缓存失败、整批更新不生效
 // ============================================================================
 
-const CACHE_NAME = 'hailiang-forum-v8';
+const CACHE_NAME = 'hailiang-forum-v9';
 const assetsToCache = [
     './index.html',
     './bridge.html',
@@ -37,7 +37,7 @@ self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME)
             .then(cache => {
-                return cache.addAll(assetsToCache);
+                return cache.addAll(assetsToCache.map(url => new Request(url, { cache: 'reload' })));
             })
             .then(() => self.skipWaiting())
     );
@@ -83,20 +83,22 @@ self.addEventListener('fetch', event => {
             caches.match(event.request).then(cachedResponse => {
                 if (cachedResponse) {
                     // 后台静默更新缓存：成功则下次访问生效，失败静默忽略，不影响本次已返回的缓存响应
-                    fetch(event.request)
-                        .then(networkResponse => {
-                            if (networkResponse && networkResponse.status === 200) {
-                                const responseClone = networkResponse.clone();
-                                caches.open(CACHE_NAME).then(cache => {
-                                    cache.put(event.request, responseClone);
-                                });
-                            }
-                        })
-                        .catch(() => {});
+                    event.waitUntil(
+                        fetch(event.request, { cache: 'no-cache' })
+                            .then(networkResponse => {
+                                if (networkResponse && networkResponse.status === 200) {
+                                    const responseClone = networkResponse.clone();
+                                    return caches.open(CACHE_NAME).then(cache => {
+                                        return cache.put(event.request, responseClone);
+                                    });
+                                }
+                            })
+                            .catch(() => {})
+                    );
                     return cachedResponse;
                 }
                 // 缓存未命中：走网络，成功则写入缓存并返回，失败返回 404（沿用原有失败语义）
-                return fetch(event.request)
+                return fetch(event.request, { cache: 'no-cache' })
                     .then(networkResponse => {
                         if (networkResponse && networkResponse.status === 200) {
                             const responseClone = networkResponse.clone();
@@ -127,20 +129,22 @@ self.addEventListener('fetch', event => {
             caches.match(event.request, { ignoreSearch: true }).then(cachedResponse => {
                 if (cachedResponse) {
                     // 后台静默更新缓存：成功则下次访问生效，失败静默忽略，不影响本次已返回的缓存响应
-                    fetch(event.request)
-                        .then(networkResponse => {
-                            if (networkResponse && networkResponse.status === 200) {
-                                const responseClone = networkResponse.clone();
-                                caches.open(CACHE_NAME).then(cache => {
-                                    cache.put(event.request, responseClone);
-                                });
-                            }
-                        })
-                        .catch(() => {});
+                    event.waitUntil(
+                        fetch(event.request, { cache: 'no-cache' })
+                            .then(networkResponse => {
+                                if (networkResponse && networkResponse.status === 200) {
+                                    const responseClone = networkResponse.clone();
+                                    return caches.open(CACHE_NAME).then(cache => {
+                                        return cache.put(event.request, responseClone);
+                                    });
+                                }
+                            })
+                            .catch(() => {})
+                    );
                     return cachedResponse;
                 }
                 // 缓存未命中：走网络，成功则写入缓存并返回，失败回缓存（ignoreSearch 深链容错）再失败 404
-                return fetch(event.request)
+                return fetch(event.request, { cache: 'no-cache' })
                     .then(networkResponse => {
                         if (networkResponse && networkResponse.status === 200) {
                             const responseClone = networkResponse.clone();
