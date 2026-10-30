@@ -204,6 +204,7 @@
             var query = state.sdk.BaseChannel.createChannelsQuery({ pageSize: 50 });
             var res = await query.loadNextPage();
             if (!res || res.code !== 0) {
+                console.error('[chat] 会话列表查询失败:', res);
                 if (loading) loading.classList.add('hidden');
                 if (listBox) listBox.innerHTML = '<p style="font-size:12px;color:var(--meta-color);text-align:center;padding:12px 0;margin:0;">会话加载失败</p>';
                 return;
@@ -219,6 +220,7 @@
             await fetchProfiles(Array.from(state.channels.keys()));
             renderConversationList();
         } catch (e) {
+            console.error('[chat] 会话列表查询异常:', e);
             if (loading) loading.classList.add('hidden');
             if (listBox) listBox.innerHTML = '<p style="font-size:12px;color:var(--meta-color);text-align:center;padding:12px 0;margin:0;">会话加载失败</p>';
         }
@@ -367,6 +369,7 @@
             });
             var res = await query.loadNextPage();
             if (!res || res.code !== 0) {
+                console.error('[chat] 历史消息查询失败:', res);
                 if (list.childElementCount === 0) {
                     list.innerHTML = '<p style="font-size:12px;color:var(--meta-color);text-align:center;padding:16px 0;margin:0;">消息加载失败</p>';
                 }
@@ -393,6 +396,7 @@
                 }
             }
         } catch (e) {
+            console.error('[chat] 历史消息查询异常:', e);
             if (list.childElementCount === 0) {
                 list.innerHTML = '<p style="font-size:12px;color:var(--meta-color);text-align:center;padding:16px 0;margin:0;">消息加载失败</p>';
             }
