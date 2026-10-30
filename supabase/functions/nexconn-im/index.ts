@@ -2,6 +2,9 @@
 // Edge Function: nexconn-im（站内私信 token 签发，契约 C1）
 // 端点: POST /functions/v1/nexconn-im
 // 鉴权: Supabase 平台级 JWT 校验开启（部署时不得加 --no-verify-jwt）
+// CORS: 浏览器 invoke 携带 Authorization/apikey 头触发 OPTIONS 预检，
+//       网关将 OPTIONS 直通本函数（不自动代答），必须自行应答 CORS 头，
+//       否则预检 405 → 浏览器拦截 POST → 客户端报"Failed to send a request"
 // 行为: 以 Supabase 用户 id 为 userId 调 NexConn Server API
 //       注册/获取用户 token（幂等：同 userId 可多 token 并存），
 //       返回 { token, userId, appKey } 供 chat.js 经 NCEngine.connect 使用
@@ -14,10 +17,17 @@
 
 const NEXCONN_API_BASE_DEFAULT = 'https://api.sg-light-api.com';
 
+// CORS 响应头（预检 OPTIONS 与业务响应共用；论坛生产域名无限制，通配即可）
+const corsHeaders: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    headers: { 'Content-Type': 'application/json; charset=utf-8', ...corsHeaders },
   });
 }
 
@@ -45,6 +55,11 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
+  // 0. CORS 预检放行（POST 前置探测，无业务语义；必须先于方法校验）
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   if (req.method !== 'POST') {
     return jsonResponse({ error: 'Method Not Allowed' }, 405);
   }

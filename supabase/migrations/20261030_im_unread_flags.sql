@@ -17,8 +17,10 @@ create table if not exists public.im_unread_flags (
     updated_at timestamptz not null default now()
 );
 
--- 2. RLS：本人仅可 SELECT / UPDATE 自己的行（徽标读取 + chat.js 校正写回）；
---    INSERT/DELETE 不设 policy（普通用户不可写）；
+-- 2. RLS：本人可 SELECT / INSERT / UPDATE 自己的行
+--    （徽标读取 + chat.js 校正写回/无行时自建首行——镜像自愈；
+--     INSERT/UPDATE 均以 auth.uid() = user_id 收口，仅能写本人行，伪造他人未读不可行）；
+--    DELETE 不设 policy（普通用户不可删行）；
 --    webhook EF 经 service role key 写入（service role 绕过 RLS，无需额外 policy）
 alter table public.im_unread_flags enable row level security;
 
@@ -27,6 +29,12 @@ create policy "im_unread_flags_select_own"
     on public.im_unread_flags
     for select
     using (auth.uid() = user_id);
+
+drop policy if exists "im_unread_flags_insert_own" on public.im_unread_flags;
+create policy "im_unread_flags_insert_own"
+    on public.im_unread_flags
+    for insert
+    with check (auth.uid() = user_id);
 
 drop policy if exists "im_unread_flags_update_own" on public.im_unread_flags;
 create policy "im_unread_flags_update_own"

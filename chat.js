@@ -4,7 +4,9 @@
 //  - EF nexconn-im（契约 C1）：POST 返回 { token, userId, appKey }
 //  - NexConn Web Chat SDK（docs.nexconn.ai/chatsdk-web）：
 //    NCEngine.initialize/connect/disconnect、BaseChannel.createChannelsQuery/createMessagesQuery/getTotalUnreadCount、
-//    new DirectChannel(peerId)、channel.clearUnreadCount()、new SendTextMessageParams({text}) + channel.sendMessage()
+//    new DirectChannel(peerId)、channel.clearUnreadCount()、new SendTextMessageParams({text}) + channel.sendMessage()、
+//    ChannelHandler.onCommunityChannelsSyncCompleted（35011 门：navi 协商含社区频道能力时，connect 后
+//    列表/未读查询需等引擎异步同步完成，否则 SDK 本地拦截返回 35011 METHOD_NOT_AVAILABLE）
 //  - im_unread_flags 为未读镜像表（plan D5）：NexConn 为权威源，chat.js 在连接/清未读/收到新消息时写校正
 // 降级（FR-009）：EF 404/未部署/无凭证/SDK CDN 失败/连接失败 → 可重试错误态，绝不白屏
 
@@ -29,7 +31,8 @@
         earliestTime: null,    // 已加载最早消息时间戳（翻页用）
         historyExhausted: false,
         localMsgSeq: 0,
-        sending: false
+        sending: false,
+        ugSynced: false       // 引擎社区频道(UG)能力同步是否已完成（onCommunityChannelsSyncCompleted）
     };
 
     // ---- DOM 快捷取用 ----
@@ -93,6 +96,55 @@
             if (ct && type !== undefined && type !== null && String(type) === String(ct.DIRECT)) return true;
         } catch (e) { /* 枚举不存在时忽略 */ }
         return false;
+    }
+
+    // ============================================================
+    // 社区频道(UG)同步门：connect 后引擎异步完成 UG 能力同步前，
+    // 会话列表/未读查询被 SDK 本地拦截返回 35011（METHOD_NOT_AVAILABLE）。
+    // 官方 Quickstart：注册 ChannelHandler.onCommunityChannelsSyncCompleted 等同步完成。
+    // ============================================================
+    var ugSyncWaiters = [];
+
+    function notifyUgSynced() {
+        state.ugSynced = true;
+        var waiters = ugSyncWaiters.slice();
+        ugSyncWaiters = [];
+        waiters.forEach(function (cb) { try { cb(); } catch (e) { /* 忽略 */ } });
+    }
+
+    function waitForUgSync(timeoutMs) {
+        if (state.ugSynced) return Promise.resolve(true);
+        return new Promise(function (resolve) {
+            var settled = false;
+            var timer = null;
+            var cb = function () {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve(true);
+            };
+            timer = setTimeout(function () {
+                if (settled) return;
+                settled = true;
+                var i = ugSyncWaiters.indexOf(cb);
+                if (i >= 0) ugSyncWaiters.splice(i, 1);
+                resolve(false);
+            }, timeoutMs);
+            ugSyncWaiters.push(cb);
+        });
+    }
+
+    // 35011 = METHOD_NOT_AVAILABLE：等待 UG 同步事件（带超时兜底）后重试，最多 2 次
+    async function withSyncRetry(fn, label) {
+        var res = await fn();
+        var tries = 0;
+        while (res && res.code === 35011 && tries < 2) {
+            tries++;
+            console.warn('[chat] ' + label + '返回 35011（社区频道同步未完成），等待同步后重试 ' + tries + '/2');
+            await waitForUgSync(tries === 1 ? 10000 : 5000);
+            res = await fn();
+        }
+        return res;
     }
 
     // ---- 头像地址（白名单校验 + 历史地址修复 + 兜底 icon.png） ----
@@ -185,7 +237,9 @@
     // ---- 未读总数（NexConn 权威源），失败时回退会话列表求和 ----
     async function totalUnread() {
         try {
-            var res = await state.sdk.BaseChannel.getTotalUnreadCount();
+            var res = await withSyncRetry(async function () {
+                return state.sdk.BaseChannel.getTotalUnreadCount();
+            }, '未读总数查询 ');
             if (res && res.code === 0 && typeof res.data === 'number') return res.data;
         } catch (e) { /* 回退列表求和 */ }
         var sum = 0;
@@ -201,8 +255,10 @@
         var listBox = el('conversation-list');
         if (loading) loading.classList.remove('hidden');
         try {
-            var query = state.sdk.BaseChannel.createChannelsQuery({ pageSize: 50 });
-            var res = await query.loadNextPage();
+            var res = await withSyncRetry(async function () {
+                var query = state.sdk.BaseChannel.createChannelsQuery({ pageSize: 50 });
+                return query.loadNextPage();
+            }, '会话列表查询 ');
             if (!res || res.code !== 0) {
                 console.error('[chat] 会话列表查询失败:', res);
                 if (loading) loading.classList.add('hidden');
@@ -360,14 +416,16 @@
         if (hint) hint.classList.remove('hidden');
         if (earlierBtn) earlierBtn.classList.add('hidden');
         try {
-            var query = state.sdk.BaseChannel.createMessagesQuery({
-                channelIdentifier: state.channel.identifier,
-                // 翻页起点取已加载最早时间-1，避免边界消息重复上屏（首屏从当前时间开始）
-                startTime: state.earliestTime !== null ? state.earliestTime - 1 : Date.now(),
-                pageSize: HISTORY_PAGE_SIZE,
-                isAscending: false // 最新在前
-            });
-            var res = await query.loadNextPage();
+            var res = await withSyncRetry(async function () {
+                var query = state.sdk.BaseChannel.createMessagesQuery({
+                    channelIdentifier: state.channel.identifier,
+                    // 翻页起点取已加载最早时间-1，避免边界消息重复上屏（首屏从当前时间开始）
+                    startTime: state.earliestTime !== null ? state.earliestTime - 1 : Date.now(),
+                    pageSize: HISTORY_PAGE_SIZE,
+                    isAscending: false // 最新在前
+                });
+                return query.loadNextPage();
+            }, '历史消息查询 ');
             if (!res || res.code !== 0) {
                 console.error('[chat] 历史消息查询失败:', res);
                 if (list.childElementCount === 0) {
@@ -535,11 +593,19 @@
                         state.connected = true;
                         setStatus('已连接');
                     } else if (s === 1 || String(s) === '1' || s === 'connecting') {
+                        state.ugSynced = false; // 重连需重新等待 UG 同步
                         setStatus('连接中...');
                     } else {
                         state.connected = false;
+                        state.ugSynced = false; // 断开后重连需重新等待 UG 同步
                         setStatus('连接已断开，消息可能延迟');
                     }
+                }
+            }));
+            // 社区频道同步完成事件（官方 Quickstart：含同步完成通知）——解除 35011 拦截
+            state.sdk.NCEngine.addChannelHandler('lt-chat-ug', new state.sdk.ChannelHandler({
+                onCommunityChannelsSyncCompleted: function () {
+                    notifyUgSynced();
                 }
             }));
             state.sdk.NCEngine.addMessageHandler('lt-chat-msg', new state.sdk.MessageHandler({
@@ -653,7 +719,8 @@
 
         installHandlers();
 
-        // 4. connect
+        // 4. connect（每次连接前重置 UG 同步门，等待本轮 onCommunityChannelsSyncCompleted）
+        state.ugSynced = false;
         try {
             var res = await state.sdk.NCEngine.connect({ token: tokenInfo.token });
             if (!res || res.code !== 0) {
