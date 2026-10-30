@@ -218,6 +218,37 @@ async function initUserSession(user) {
     // 消费 URL 参数（topic/comment 话题深链 + edit=1 自动打开个人中心编辑面板）：
     // 置于档案填充完成之后，保证 openProfile/深链拿到真实资料，冷启动"先显示后填充"时序不被破坏
     consumeUrlParams();
+
+    // 站内私信未读徽标（US3）：异步注入 chat-badge.js（加载失败静默，不阻塞首页关键路径，plan D2/SC-003）
+    initChatBadge();
+}
+
+// 站内私信：跳转聊天页并定位与目标用户的会话（各"发消息"入口统一走此函数，US2）
+window.startChatWith = function(userId) {
+    if (!userId) return;
+    window.location.href = 'chat.html?peer=' + encodeURIComponent(userId);
+};
+
+// 站内私信徽标注入器（T013）：幂等——已加载直接 init、加载中跳过（onload 回调收口）、未加载异步注入
+function initChatBadge() {
+    try {
+        if (window.LTChatBadge) {
+            window.LTChatBadge.init(window.sbApp, currentAuthUser && currentAuthUser.id);
+            return;
+        }
+        if (document.querySelector('script[data-lt-chat-badge="1"]')) return; // 正在加载，onload 回调会完成 init
+        const s = document.createElement('script');
+        s.src = 'chat-badge.js?v=1';
+        s.async = true;
+        s.setAttribute('data-lt-chat-badge', '1');
+        s.onload = () => {
+            if (window.LTChatBadge && window.sbApp && currentAuthUser) {
+                window.LTChatBadge.init(window.sbApp, currentAuthUser.id);
+            }
+        };
+        s.onerror = () => { /* 徽标加载失败静默（增强功能，不阻断论坛主流程） */ };
+        document.head.appendChild(s);
+    } catch (e) { /* 静默 */ }
 }
 
 async function checkUnreadNotifications(userId) {
@@ -482,6 +513,10 @@ window.handleLogout = async function() {
     // 隐私红线（FR-004）：登出动作触发即清空内容快照与滚动位置两 key，
     // 下一个使用者不可见上一个用户浏览内容（清空失败静默，不阻断登出）
     clearSnapshot();
+    // 站内私信徽标清理（T013）：断开 Realtime 订阅并隐藏徽标（置于 signOut 前，确保用户上下文仍在）
+    if (window.LTChatBadge) {
+        try { window.LTChatBadge.cleanup(); } catch (e) { /* 徽标清理失败静默 */ }
+    }
     await db.auth.signOut();
     currentUserProfile = null;
     currentAuthUser = null;
@@ -844,6 +879,10 @@ async function loadTopics(categoryId, page = 1) {
             const timeHtml = timeString ? `<span style="color:#718096; font-size:10px; margin-left:6px;">${timeString}</span>` : '';
             // 回复仅传话题 ID 与评论者用户 ID，昵称由处理函数从内存映射回查
             let replyAction = `<button onclick="window.replyToUser('${topic.id}', '${comment.user_id}')" style="background:transparent; color:var(--primary-color, #3182ce); border:none; font-weight: normal; font-size:9px; cursor:pointer; padding:0 4px; margin-left:6px;">回复</button>`;
+            // 站内私信入口（US2）：评论作者旁"发消息"小按钮，自己对自己不出现
+            const commentChatBtn = (currentAuthUser && currentAuthUser.id !== comment.user_id)
+                ? `<button onclick="window.startChatWith('${comment.user_id}')" style="background:transparent; color:#3182ce; border:none; font-weight:normal; font-size:9px; cursor:pointer; padding:0 4px; margin-left:2px;">发消息</button>`
+                : '';
 
             let commentActions = '';
             if (canDeleteComment) {
@@ -852,7 +891,7 @@ async function loadTopics(categoryId, page = 1) {
             commentsHtml += `
                 <div id="comment-${comment.id}" style="font-size:12px; margin-top:3px; padding-bottom:2px; display:flex; justify-content:space-between; align-items:center;">
                     <div>
-                        <span class="clickable-name" onclick="window.viewUserProfile('${comment.user_id}')">${escapeHtml(commentAuthor)}</span><b>:</b> ${escapeHtml(comment.content)} ${timeHtml} ${replyAction}
+                        <span class="clickable-name" onclick="window.viewUserProfile('${comment.user_id}')">${escapeHtml(commentAuthor)}</span><b>:</b> ${escapeHtml(comment.content)} ${timeHtml} ${replyAction}${commentChatBtn}
                     </div>
                     <div style="flex-shrink:0;">
                         ${commentActions}
@@ -868,6 +907,10 @@ async function loadTopics(categoryId, page = 1) {
         const isLiked = likedSet.has(topic.id);        
         const isFavorited = favSet.has(topic.id);        
         const likeCount = likeCountMap[topic.id] || 0;
+        // 站内私信入口（US2）：帖子作者旁"发消息"小按钮，自己对自己不出现
+        const topicChatBtn = (currentAuthUser && currentAuthUser.id !== topic.user_id)
+            ? `<button onclick="window.startChatWith('${topic.user_id}')" style="background:transparent; color:#3182ce; border:none; font-weight:normal; font-size:10px; cursor:pointer; padding:0 2px; margin-left:4px;">发消息</button>`
+            : '';
         // 权限与操作按钮定义（编辑仅传话题 ID，内容从内存映射回查）
         let ownerActions = '';
         if (isOwner) {
@@ -885,7 +928,7 @@ async function loadTopics(categoryId, page = 1) {
                 
                 <div class="flex" style="margin-top:6px; margin-bottom:4px;">
                     <span style="font-size:11px; color:var(--meta-color);">
-                        发布者：<b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${escapeHtml(authorName)}</b>${badge} &nbsp;|&nbsp; 发布于 ${new Date(topic.created_at).toLocaleString()}
+                        发布者：<b class="clickable-name" onclick="window.viewUserProfile('${topic.user_id}')">${escapeHtml(authorName)}</b>${badge}${topicChatBtn} &nbsp;|&nbsp; 发布于 ${new Date(topic.created_at).toLocaleString()}
                     </span>
                     <!-- 【完整保留】点赞与收藏交互按钮 -->
                     <div style="display:flex; gap:10px; align-items:center;">
@@ -1120,6 +1163,18 @@ async function performSearch(rawKeyword) {
             itemEl.onclick = () => {
                 window.location.href = 'profile.html?id=' + encodeURIComponent(m.id);
             };
+            // 站内私信入口（US2）：搜索成员卡片"发消息"小按钮，自己对自己不出现
+            if (currentAuthUser && currentAuthUser.id !== m.id) {
+                const chatBtn = document.createElement('button');
+                chatBtn.type = 'button';
+                chatBtn.textContent = '发消息';
+                chatBtn.style.cssText = 'flex-shrink:0; margin-left:8px; padding:2px 8px; font-size:11px; background:#4a5568;';
+                chatBtn.onclick = (ev) => {
+                    ev.stopPropagation(); // 不触发卡片整卡跳个人主页的既有行为
+                    window.startChatWith(m.id);
+                };
+                itemEl.appendChild(chatBtn);
+            }
             memberGrid.appendChild(itemEl);
         });
         memberCard.appendChild(memberGrid);

@@ -17,7 +17,7 @@
 <!-- 引入独立的 PWA 引导脚本 -->
 <script src="main.js?v=1" defer></script>
 <!-- 引入主论坛页业务脚本（原内联脚本外置，defer 保证在 main.js 之后执行） -->
-<script src="index.js?v=1" defer></script>
+<script src="index.js?v=2" defer></script>
 <style> 
 :root {
     --bg-color: #f4f6f8; 
@@ -143,6 +143,9 @@ button:hover { opacity: 0.9; }
                 </div>
                 <div style="display: flex; gap: 8px;">
                     <button onclick="window.location.href='bridge.html'" style="background:#4a5568;">互动空间</button>
+                    <button onclick="window.location.href='chat.html'" style="background:#4a5568; position: relative;">
+                        消息 <span id="chat-unread-badge" class="hidden" style="position:absolute; top:-5px; right:-5px; background:red; color:#fff; font-size:10px; font-weight:600; min-width:16px; height:16px; line-height:16px; border-radius:8px; text-align:center; padding:0 4px; box-sizing:border-box;"></span>
+                    </button>
                     <button onclick="window.openProfile()" style="background:#4a5568; position: relative;">
                         个人中心 <span id="notification-badge" class="hidden" style="position:absolute; top:-5px; right:-5px; background:red; width:10px; height:10px; border-radius:50%;"></span>
                     </button>

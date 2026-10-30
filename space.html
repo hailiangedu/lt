@@ -223,6 +223,19 @@
                         card.onclick = () => {
                             window.location.href = 'profile.html?id=' + encodeURIComponent(user.id);
                         };
+                        // 站内私信入口（US2）：非本人成员卡片追加"发消息"小按钮，
+                        // stopPropagation 避免触发卡片整卡跳转个人主页的既有行为
+                        if (user.id !== currentUser?.id) {
+                            const chatBtn = document.createElement('button');
+                            chatBtn.type = 'button';
+                            chatBtn.textContent = '发消息';
+                            chatBtn.style.cssText = 'flex-shrink:0; margin-left:8px; padding:3px 10px; font-size:12px; background:#4a5568;';
+                            chatBtn.onclick = (ev) => {
+                                ev.stopPropagation();
+                                window.location.href = 'chat.html?peer=' + encodeURIComponent(user.id);
+                            };
+                            card.appendChild(chatBtn);
+                        }
                         container.appendChild(card);
                     });
                 };

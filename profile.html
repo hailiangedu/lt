@@ -200,6 +200,10 @@
                 <div id="p-edit-btn-wrap" class="hidden" style="margin-top: 12px;">
                     <button onclick="window.location.href='index.html?edit=1'">编辑资料</button>
                 </div>
+                <!-- 他人视角：站内私信入口（跳转聊天页定位与该用户的会话；isSelf 时隐藏） -->
+                <div id="p-chat-btn-wrap" class="hidden" style="margin-top: 12px;">
+                    <button onclick="window.location.href='chat.html?peer=' + encodeURIComponent(targetUserId)">发消息</button>
+                </div>
             </div>
 
             <!-- 详细资料卡：三档视角（自己全可见 / 他人按隐私开关+管理员特权口径） -->
@@ -297,9 +301,11 @@
             document.getElementById('profile-page-title').innerText = pageTitle;
             document.title = pageTitle;
 
-            // 自己视角：显示"编辑资料"入口（跳转现有个人中心编辑面板）
+            // 自己视角：显示"编辑资料"入口（跳转现有个人中心编辑面板）；他人视角：显示"发消息"私信入口
             if (isSelf) {
                 document.getElementById('p-edit-btn-wrap').classList.remove('hidden');
+            } else {
+                document.getElementById('p-chat-btn-wrap').classList.remove('hidden');
             }
         }
 
