@@ -9,7 +9,7 @@
 //    漏传任一预缓存文件将导致 SW install 预缓存失败、整批更新不生效
 // ============================================================================
 
-const CACHE_NAME = 'hailiang-forum-v13';
+const CACHE_NAME = 'hailiang-forum-v14';
 const assetsToCache = [
     './index.html',
     './bridge.html',
@@ -23,7 +23,7 @@ const assetsToCache = [
     './common.js?v=1',
     './main.js?v=1',
     './index.js?v=2',
-    './chat.js?v=4',
+    './chat.js?v=5',
     './chat-badge.js?v=1',
     './beijing.png',
     './image.png',

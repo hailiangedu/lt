@@ -201,20 +201,16 @@
 
     // ============================================================
     // 未读镜像表 im_unread_flags 校正写入（plan D5/D2，T014）
-    // RLS 仅开放 SELECT/UPDATE：先 UPDATE 自有行，0 行命中再尝试 INSERT（INSERT 可能被 RLS 拒绝，静默失败可接受）
+    // 统一用 upsert(onConflict: user_id) 原子写入：消除并发首建行时
+    // UPDATE→0 行→INSERT 两步舞撞主键的 409 竞态噪音（数据本就正确，纯降噪）
+    // RLS：INSERT/UPDATE 两条本人 policy 均已开放，upsert 两种落盘路径都能通过
     // ============================================================
     async function correctUnreadFlag(count) {
         if (!state.client || !state.userId) return;
         var now = new Date().toISOString();
         try {
-            var upd = await state.client.from('im_unread_flags')
-                .update({ unread_count: count, updated_at: now })
-                .eq('user_id', state.userId);
-            if (upd.error) return;
-            if (!upd.data || upd.data.length === 0) {
-                await state.client.from('im_unread_flags')
-                    .insert({ user_id: state.userId, unread_count: count, updated_at: now });
-            }
+            await state.client.from('im_unread_flags')
+                .upsert({ user_id: state.userId, unread_count: count, updated_at: now }, { onConflict: 'user_id' });
         } catch (e) { /* 镜像失败不影响聊天主流程 */ }
     }
 
@@ -228,8 +224,9 @@
                     .update({ unread_count: (Number(sel.data.unread_count) || 0) + 1, updated_at: new Date().toISOString() })
                     .eq('user_id', state.userId);
             } else {
+                // 并发撞首行时静默跳过（对端已建行，权威校正随后会覆写）
                 await state.client.from('im_unread_flags')
-                    .insert({ user_id: state.userId, unread_count: 1, updated_at: new Date().toISOString() });
+                    .upsert({ user_id: state.userId, unread_count: 1, updated_at: new Date().toISOString() }, { onConflict: 'user_id', ignoreDuplicates: true });
             }
         } catch (e) { /* 静默 */ }
     }
