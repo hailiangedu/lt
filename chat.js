@@ -622,8 +622,9 @@
         try {
             tokenInfo = await fetchImToken();
         } catch (e) {
+            console.error('[chat] IM 凭证获取失败:', e);
             try { sessionStorage.removeItem('forum_chat_token'); } catch (e2) { /* 忽略 */ }
-            showError('聊天服务暂不可用（凭证获取失败），请稍后重试');
+            showError('聊天服务暂不可用' + (e && e.message ? '：' + e.message : '（凭证获取失败），请稍后重试'));
             return;
         }
 
@@ -715,6 +716,9 @@
 
     // ---- 入口 ----
     async function init() {
+        // 主题/背景跟随全站设置（common.js 契约：每页启动调用；storage 事件跨页实时同步）
+        if (typeof window.initThemeAndBackground === 'function') window.initThemeAndBackground();
+        if (typeof window.watchSettingsSync === 'function') window.watchSettingsSync();
         bindEvents();
         state.client = window.getSupabaseClient();
         if (!state.client) {
