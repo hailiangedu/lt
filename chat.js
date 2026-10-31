@@ -469,8 +469,14 @@
         var avatar = document.createElement('img');
         avatar.className = 'msg-avatar';
         var senderProfile = state.profiles.get(String(m.senderUserId));
-        avatar.src = mine ? 'icon.png' : avatarUrl(senderProfile);
+        avatar.src = avatarUrl(mine ? state.profiles.get(String(state.userId)) : senderProfile);
         avatar.alt = '';
+        // 自己的头像尚未缓存时异步补取后回填（首屏竞态兜底，期间显示默认图）
+        if (mine && !state.profiles.has(String(state.userId))) {
+            fetchProfile(String(state.userId)).then(function (own) {
+                avatar.src = avatarUrl(own);
+            }).catch(function () { /* 保持默认图 */ });
+        }
 
         var body = document.createElement('div');
         body.className = 'msg-body';
@@ -801,6 +807,8 @@
             showError('会话异常，请重新登录');
             return;
         }
+        // 预取自己的资料（消息气泡头像用，登录后立即入缓存避免首屏闪默认图）
+        fetchProfile(state.userId);
         connectIm();
     }
 
