@@ -9,7 +9,7 @@
 //    漏传任一预缓存文件将导致 SW install 预缓存失败、整批更新不生效
 // ============================================================================
 
-const CACHE_NAME = 'hailiang-forum-v17';
+const CACHE_NAME = 'hailiang-forum-v18';
 const assetsToCache = [
     './index.html',
     './bridge.html',
@@ -123,22 +123,24 @@ self.addEventListener('fetch', event => {
     }
 
     // 同源 HTML 导航请求（App Shell 秒开）：stale-while-revalidate
-    // 响应逻辑与上方静态 SWR 一致（命中即时返回 + 后台静默更新，下次访问生效），
-    // 但缓存匹配使用 ignoreSearch——深链 URL（index.html?topic=..&comment=..）也能命中
-    // 预缓存的 index.html；后台 cache.put 写原请求 URL（带参条目，无害）；
-    // 缓存未命中走网络写缓存，失败回缓存（同样 ignoreSearch）再失败 404
+    // 缓存键统一归一为去参裸 URL（origin + pathname）：深链（?peer=..&topic=..）与裸路径
+    // 命中同一条目，后台刷新也写回裸键。旧版缺陷：匹配用 ignoreSearch 而写回带参原 URL，
+    // 深链访问永远命中安装时的旧预缓存条目且永不被刷新（改版不生效的元凶之一）；
+    // 缓存未命中走网络写缓存（写裸键），失败回缓存再失败 404
     if (event.request.method === 'GET' && event.request.mode === 'navigate' && requestUrl.origin === self.location.origin) {
+        const bareUrl = requestUrl.origin + requestUrl.pathname;
+        const bareRequest = new Request(bareUrl, { cache: 'no-cache' });
         event.respondWith(
-            caches.match(event.request, { ignoreSearch: true }).then(cachedResponse => {
+            caches.match(bareUrl).then(cachedResponse => {
                 if (cachedResponse) {
                     // 后台静默更新缓存：成功则下次访问生效，失败静默忽略，不影响本次已返回的缓存响应
                     event.waitUntil(
-                        fetch(event.request, { cache: 'no-cache' })
+                        fetch(bareRequest)
                             .then(networkResponse => {
                                 if (networkResponse && networkResponse.status === 200) {
                                     const responseClone = networkResponse.clone();
                                     return caches.open(CACHE_NAME).then(cache => {
-                                        return cache.put(event.request, responseClone);
+                                        return cache.put(bareUrl, responseClone);
                                     });
                                 }
                             })
@@ -146,19 +148,19 @@ self.addEventListener('fetch', event => {
                     );
                     return cachedResponse;
                 }
-                // 缓存未命中：走网络，成功则写入缓存并返回，失败回缓存（ignoreSearch 深链容错）再失败 404
+                // 缓存未命中：走网络，成功则写入缓存并返回，失败回缓存再失败 404
                 return fetch(event.request, { cache: 'no-cache' })
                     .then(networkResponse => {
                         if (networkResponse && networkResponse.status === 200) {
                             const responseClone = networkResponse.clone();
                             caches.open(CACHE_NAME).then(cache => {
-                                cache.put(event.request, responseClone);
+                                cache.put(bareUrl, responseClone);
                             });
                         }
                         return networkResponse;
                     })
                     .catch(() => {
-                        return caches.match(event.request, { ignoreSearch: true }).then(fallbackResponse => {
+                        return caches.match(bareUrl).then(fallbackResponse => {
                             if (fallbackResponse) {
                                 return fallbackResponse;
                             }
