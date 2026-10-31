@@ -268,7 +268,15 @@
                 if (!ch || !isDirect(ch.channelType)) return; // 仅单聊（群聊/系统频道不入列）
                 var peerId = ch.channelId !== undefined && ch.channelId !== null ? String(ch.channelId) : '';
                 if (!peerId || peerId === String(state.userId)) return;
-                state.channels.set(peerId, ch);
+                // 归一化为普通对象入库：SDK 会话对象属性为 getter-only，
+                // 后续本地改写（unreadCount/latestMessage/operationTime）会抛 TypeError
+                state.channels.set(peerId, {
+                    channelId: peerId,
+                    channelType: 1,
+                    unreadCount: Number(ch.unreadCount) || 0,
+                    latestMessage: ch.latestMessage || null,
+                    operationTime: Number(ch.operationTime) || 0
+                });
             });
             await fetchProfiles(Array.from(state.channels.keys()));
             renderConversationList();
