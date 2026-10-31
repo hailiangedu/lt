@@ -63,7 +63,8 @@
             box-sizing: border-box;
             min-height: 100vh;
         }
-        .container { max-width: 950px; margin: 0 auto; }
+        /* 聊天页为 IM 双栏布局：满宽使用屏幕（区别于论坛阅读页的 950px 上限），仅保留 body padding 留白 */
+        .container { margin: 0 auto; }
         .card {
             background-color: var(--card-bg);
             backdrop-filter: blur(12px);
